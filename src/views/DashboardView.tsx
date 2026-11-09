@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Branch, DashboardStats, RekapRecord } from '../types';
 import { formatRupiah, formatDateIndo } from '../utils/calculations';
-import { clearBranchDrafts } from '../utils/storage';
+import { clearBranchDrafts, computeLocalDashboardStats, getCachedRecords, setCachedRecords } from '../utils/storage';
 import {
   TrendingUp,
   Wallet,
@@ -44,11 +44,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       setLoading(true);
       setError(null);
       const res = await fetch(`/api/dashboard?branch=${activeBranch}`);
-      if (!res.ok) throw new Error('Gagal memuat data dashboard');
-      const data = await res.json();
-      setStats(data);
-    } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan');
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        setStats(data);
+        return;
+      }
+      // Fallback lokal jika API server tidak merespon JSON (misal static Vercel)
+      const localStats = computeLocalDashboardStats(activeBranch);
+      setStats(localStats);
+    } catch {
+      // Fallback lokal tanpa melempar error
+      const localStats = computeLocalDashboardStats(activeBranch);
+      setStats(localStats);
     } finally {
       setLoading(false);
     }
@@ -60,20 +68,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
     try {
       setIsResetting(true);
-      const res = await fetch('/api/records/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branch: branchToReset }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        clearBranchDrafts(branchToReset);
-        setResetMessage(`Rekapan Cabang ${branchToReset} berhasil di-reset menjadi 0.`);
-        await fetchDashboardData();
-        setTimeout(() => setResetMessage(null), 4000);
-      } else {
-        alert(data.error || 'Gagal mereset rekapan');
+      clearBranchDrafts(branchToReset);
+      const remaining = getCachedRecords().filter((r) => r.branch !== branchToReset);
+      setCachedRecords(remaining);
+
+      try {
+        await fetch('/api/records/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ branch: branchToReset }),
+        });
+      } catch {
+        // Abaikan jika server offline
       }
+
+      setResetMessage(`Rekapan Cabang ${branchToReset} berhasil di-reset menjadi 0.`);
+      await fetchDashboardData();
+      setTimeout(() => setResetMessage(null), 4000);
     } catch (err: any) {
       alert('Gagal mereset rekapan: ' + (err.message || 'Koneksi error'));
     } finally {

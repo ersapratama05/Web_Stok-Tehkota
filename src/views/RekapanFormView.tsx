@@ -14,7 +14,7 @@ import {
   parseRupiahInput,
 } from '../utils/calculations';
 import { CATEGORIES_ORDER, createInitialStockRows, TEH_KOTA_ITEMS } from '../utils/itemsList';
-import { addToSyncQueue, getLocalDraft, saveLocalDraft, removeLocalDraft } from '../utils/storage';
+import { addToSyncQueue, getLocalDraft, saveLocalDraft, removeLocalDraft, saveRecordToLocal } from '../utils/storage';
 import { CupModal } from '../components/CupModal';
 import {
   Save,
@@ -257,8 +257,9 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
       notes,
     };
 
-    // Save locally first for instant offline safety
+    // Save locally first for instant offline & standalone safety
     saveLocalDraft(activeBranch, date, payload);
+    saveRecordToLocal(payload);
 
     if (!isOnline) {
       addToSyncQueue(payload);
@@ -277,34 +278,52 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        throw new Error('Gagal menyimpan ke server');
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const resData = await res.json();
+        setRecordId(resData.record.id);
+        setRecordStatus(statusToSave);
+        setSyncStatus('saved');
+        setLastSavedTime(timeStr);
+        setSaveMessage({
+          text:
+            statusToSave === 'draft'
+              ? 'Draf berhasil disimpan! Anda dapat melanjutkan kapan saja.'
+              : 'Rekapan berhasil disimpan ke database!',
+          type: 'success',
+        });
+      } else {
+        // Fallback jika API hosting Vercel static tidak aktif
+        setRecordId(payload.id);
+        setRecordStatus(statusToSave);
+        setSyncStatus('saved');
+        setLastSavedTime(timeStr);
+        setSaveMessage({
+          text:
+            statusToSave === 'draft'
+              ? 'Draf berhasil disimpan di penyimpanan lokal browser!'
+              : 'Rekapan berhasil disimpan secara lokal di perangkat!',
+          type: 'success',
+        });
       }
-
-      const resData = await res.json();
-      setRecordId(resData.record.id);
-      setRecordStatus(statusToSave);
-      setSyncStatus('saved');
-      setLastSavedTime(timeStr);
-      setSaveMessage({
-        text:
-          statusToSave === 'draft'
-            ? 'Draf berhasil disimpan! Anda dapat melanjutkan kapan saja.'
-            : 'Rekapan berhasil disimpan ke database!',
-        type: 'success',
-      });
 
       if (statusToSave === 'saved' && onSavedSuccess) {
         setTimeout(onSavedSuccess, 800);
       }
     } catch (err: any) {
-      console.error('Error saving record:', err);
+      console.warn('API sync warning, saved to local cache:', err);
       addToSyncQueue(payload);
-      setSyncStatus('error');
+      setRecordId(payload.id);
+      setRecordStatus(statusToSave);
+      setSyncStatus('saved');
+      setLastSavedTime(timeStr);
       setSaveMessage({
-        text: 'Gagal tersambung ke server. Perubahan disimpan secara lokal dalam antrean sinkronisasi.',
-        type: 'error',
+        text: 'Rekapan berhasil disimpan secara lokal di browser!',
+        type: 'success',
       });
+      if (statusToSave === 'saved' && onSavedSuccess) {
+        setTimeout(onSavedSuccess, 800);
+      }
     }
   };
 

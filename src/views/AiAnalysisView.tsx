@@ -68,9 +68,18 @@ export const AiAnalysisView: React.FC = () => {
         signal: abortController.signal,
       });
 
+      const contentType = res.headers.get('content-type') || '';
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Gagal memproses analisis AI');
+        if (contentType.includes('application/json')) {
+          const errData = await res.json();
+          throw new Error(errData.error || 'Gagal memproses analisis AI');
+        } else {
+          throw new Error('Layanan AI server belum aktif pada hosting ini. Fitur rekapan, stok, dan omset tetap dapat digunakan secara lokal.');
+        }
+      }
+
+      if (!contentType.includes('application/json')) {
+        throw new Error('Layanan AI server belum merespon JSON.');
       }
 
       const data = await res.json();

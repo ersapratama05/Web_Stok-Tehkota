@@ -1,4 +1,4 @@
-import { RekapRecord } from '../types';
+import { Branch, DashboardStats, MonthlyReportData, RekapRecord } from '../types';
 
 const DRAFT_PREFIX = 'tehkota_draft_';
 const SYNC_QUEUE_KEY = 'tehkota_sync_queue';
@@ -110,4 +110,116 @@ export function getCachedRecords(): RekapRecord[] {
   } catch {
     return [];
   }
+}
+
+export function saveRecordToLocal(record: RekapRecord): void {
+  try {
+    const existing = getCachedRecords();
+    const idx = existing.findIndex((r) => r.id === record.id || (r.branch === record.branch && r.date === record.date));
+    if (idx >= 0) {
+      existing[idx] = record;
+    } else {
+      existing.unshift(record);
+    }
+    setCachedRecords(existing);
+  } catch (err) {
+    console.warn('Failed to save record locally:', err);
+  }
+}
+
+export function getLocalRecords(branch?: Branch | 'All'): RekapRecord[] {
+  const records = getCachedRecords();
+  if (!branch || branch === 'All') return records;
+  return records.filter((r) => r.branch === branch);
+}
+
+export function computeLocalDashboardStats(branch?: Branch | 'All', monthStr?: string): DashboardStats {
+  const targetMonth = monthStr || new Date().toISOString().slice(0, 7);
+  const allRecords = getLocalRecords(branch);
+  const monthly = allRecords.filter((r) => r.date.startsWith(targetMonth));
+
+  let totalOmsetKotor = 0;
+  let totalOmsetBersih = 0;
+  let totalPengeluaran = 0;
+  let totalQris = 0;
+
+  for (const r of monthly) {
+    totalOmsetKotor += r.totalOmset || 0;
+    totalOmsetBersih += r.omsetAkhir || 0;
+    totalPengeluaran += r.totalPengeluaran || 0;
+    totalQris += r.qris || 0;
+  }
+
+  const sortedRecent = [...allRecords]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 10);
+
+  return {
+    branch: branch || 'All',
+    monthStr: targetMonth,
+    totalOmsetKotor,
+    totalOmsetBersih,
+    totalPengeluaran,
+    totalQris,
+    rekapCount: monthly.length,
+    recentRekapan: sortedRecent,
+  };
+}
+
+export function computeLocalMonthlyReport(branch?: Branch | 'All', monthStr?: string): MonthlyReportData {
+  const targetMonth = monthStr || new Date().toISOString().slice(0, 7);
+  const [yearStr, monthNumStr] = targetMonth.split('-');
+  const year = parseInt(yearStr, 10) || new Date().getFullYear();
+  const month = parseInt(monthNumStr, 10) || new Date().getMonth() + 1;
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  const records = getLocalRecords(branch).filter((r) => r.date.startsWith(targetMonth));
+  const recordsByDate = new Map<string, RekapRecord>();
+  records.forEach((r) => recordsByDate.set(r.date, r));
+
+  let totalOmsetKotor = 0;
+  let totalOmsetBersih = 0;
+  let totalPengeluaran = 0;
+  let totalQris = 0;
+
+  for (const r of records) {
+    totalOmsetKotor += r.totalOmset || 0;
+    totalOmsetBersih += r.omsetAkhir || 0;
+    totalPengeluaran += r.totalPengeluaran || 0;
+    totalQris += r.qris || 0;
+  }
+
+  const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  const dailyData = [];
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dayStr = String(d).padStart(2, '0');
+    const fullDate = `${targetMonth}-${dayStr}`;
+    const dateObj = new Date(year, month - 1, d);
+    const dayName = dayNames[dateObj.getDay()];
+    const rec = recordsByDate.get(fullDate);
+
+    dailyData.push({
+      date: fullDate,
+      dayName: `${dayName}, ${d}`,
+      omsetKotor: rec ? rec.totalOmset : 0,
+      pengeluaran: rec ? rec.totalPengeluaran : 0,
+      qris: rec ? rec.qris : 0,
+      omsetBersih: rec ? rec.omsetAkhir : 0,
+      hasRekap: !!rec,
+      rekapId: rec?.id,
+      status: (rec?.status === 'draft' ? 'draft' : 'saved') as 'draft' | 'saved' | undefined,
+    });
+  }
+
+  return {
+    branch: branch || 'All',
+    month: targetMonth,
+    totalOmsetKotor,
+    totalOmsetBersih,
+    totalPengeluaran,
+    totalQris,
+    daysCount: records.length,
+    dailyData,
+  };
 }

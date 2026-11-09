@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Branch, MonthlyReportData, RekapRecord } from '../types';
 import { formatDateIndo, formatRupiah } from '../utils/calculations';
+import { computeLocalMonthlyReport, getCachedRecords, getLocalDraft } from '../utils/storage';
 import {
   FileBarChart,
   Calendar,
@@ -24,7 +25,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
   onNavigateToRekap,
 }) => {
   const { user, activeBranch, setActiveBranch } = useAuth();
-  const [selectedBranch, setSelectedBranch] = useState<string>(activeBranch);
+  const [selectedBranch, setSelectedBranch] = useState<Branch | 'All'>(activeBranch);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
     const y = now.getFullYear();
@@ -42,11 +43,17 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
     setError(null);
     try {
       const res = await fetch(`/api/reports/monthly?branch=${selectedBranch}&month=${selectedMonth}`);
-      if (!res.ok) throw new Error('Gagal memuat laporan bulanan');
-      const data = await res.json();
-      setReportData(data);
-    } catch (err: any) {
-      setError(err.message || 'Terjadi kesalahan');
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        setReportData(data);
+        return;
+      }
+      const localData = computeLocalMonthlyReport(selectedBranch, selectedMonth);
+      setReportData(localData);
+    } catch {
+      const localData = computeLocalMonthlyReport(selectedBranch, selectedMonth);
+      setReportData(localData);
     } finally {
       setLoading(false);
     }
@@ -61,13 +68,25 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
     if (hasRekap && rekapId) {
       try {
         const res = await fetch(`/api/records/${rekapId}`);
-        if (res.ok) {
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
           const data = await res.json();
           onOpenRecordDetail(data.record);
           return;
         }
       } catch {
         // fallback
+      }
+      // Cek cache lokal
+      const cached = getCachedRecords().find((r) => r.id === rekapId || r.date === dateStr);
+      if (cached) {
+        onOpenRecordDetail(cached);
+        return;
+      }
+      const draft = getLocalDraft(selectedBranch === 'All' ? 'Sompok' : selectedBranch, dateStr);
+      if (draft) {
+        onOpenRecordDetail(draft);
+        return;
       }
     }
     // If no record, open form with this date
@@ -113,7 +132,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
               Pilih Cabang
             </label>
             <div className="grid grid-cols-3 gap-2">
-              {['Sompok', 'Suyudono', 'All'].map((b) => (
+              {(['Sompok', 'Suyudono', 'All'] as const).map((b) => (
                 <button
                   key={b}
                   type="button"

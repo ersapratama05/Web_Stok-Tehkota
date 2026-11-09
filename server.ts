@@ -26,7 +26,8 @@ const ai = new GoogleGenAI({
   },
 });
 
-const DATA_DIR = path.resolve(__dirname, 'data');
+const isVercel = Boolean(process.env.VERCEL);
+const DATA_DIR = isVercel ? '/tmp/data' : path.resolve(__dirname, 'data');
 const DB_PATH = path.resolve(DATA_DIR, 'tehkota_db.json');
 
 // Interface for server database
@@ -958,6 +959,10 @@ async function startServer() {
   });
 }
 
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
-});
+if (!process.env.VERCEL) {
+  startServer().catch((err) => {
+    console.error('Failed to start server:', err);
+  });
+}
+
+export default app;
