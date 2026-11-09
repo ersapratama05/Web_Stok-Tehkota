@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#064e3b" />
+      <stop offset="100%" stop-color="#022c22" />
+    </linearGradient>
+    <linearGradient id="teaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+  </defs>
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#bgGrad)" stroke="#10b981" stroke-width="8" />
+  
+  <!-- Outer Ring Accent -->
+  <circle cx="256" cy="256" r="220" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 4" opacity="0.6"/>
+
+  <!-- Straw -->
+  <line x1="280" y1="120" x2="330" y2="28" stroke="#f59e0b" stroke-width="18" stroke-linecap="round" />
+  <line x1="280" y1="120" x2="330" y2="28" stroke="#d97706" stroke-width="4" stroke-linecap="round" />
+
+  <!-- Cup Lid / Rim -->
+  <rect x="180" y="145" width="152" height="20" rx="10" fill="#ffffff" opacity="0.95" />
+  <ellipse cx="256" cy="148" rx="80" ry="12" fill="#e2e8f0" />
+
+  <!-- Cup Body -->
+  <path d="M 190 165 L 210 390 Q 212 410 230 410 L 282 410 Q 300 410 302 390 L 322 165 Z" fill="#ffffff" opacity="0.25" />
+  
+  <!-- Liquid / Tea Inside -->
+  <path d="M 196 210 L 213 385 Q 214 402 232 402 L 280 402 Q 298 402 299 385 L 316 210 Q 256 220 196 210 Z" fill="url(#teaGrad)" />
+  
+  <!-- Ice Cubes -->
+  <rect x="220" y="230" width="32" height="32" rx="6" fill="#ffffff" opacity="0.75" transform="rotate(12 236 246)"/>
+  <rect x="260" y="250" width="28" height="28" rx="5" fill="#ffffff" opacity="0.65" transform="rotate(-15 274 264)"/>
+  
+  <!-- Tea Leaves Accent -->
+  <path d="M 256 120 C 235 95 240 70 270 75 C 285 95 270 120 256 120 Z" fill="#10b981" />
+  <path d="M 240 135 C 220 120 215 100 235 102 C 248 115 245 130 240 135 Z" fill="#34d399" />
+  <path d="M 256 120 Q 252 95 264 80" stroke="#064e3b" stroke-width="2" fill="none" />
+
+  <!-- Brand Typography -->
+  <text x="256" y="465" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="34" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="4">TEH KOTA</text>
+  <text x="256" y="490" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="16" font-weight="600" fill="#fbbf24" text-anchor="middle" letter-spacing="2">SOMPOK &amp; SUYUDONO</text>
+</svg>

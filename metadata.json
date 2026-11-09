@@ -1,0 +1,8 @@
+{
+  "name": "Rekapan Teh Kota",
+  "description": "Aplikasi pencatatan stok harian, pengeluaran, perhitungan omset, dan analisis AI untuk cabang Sompok dan Suyudono Teh Kota.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

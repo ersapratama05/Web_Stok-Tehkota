@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <script>
+      // Guard against Vite HMR WebSocket connection failure in cloud sandbox
+      (function () {
+        if (typeof window === 'undefined') return;
+        window.addEventListener('unhandledrejection', function (e) {
+          if (e && e.reason && (String(e.reason.message).includes('WebSocket') || String(e.reason.stack).includes('@vite/client'))) {
+            e.preventDefault();
+          }
+        });
+        window.addEventListener('error', function (e) {
+          if (e && (String(e.message).includes('WebSocket') || String(e.filename).includes('@vite/client'))) {
+            e.preventDefault();
+          }
+        });
+        if (window.WebSocket) {
+          var OrigWS = window.WebSocket;
+          window.WebSocket = function (url, proto) {
+            if (proto === 'vite-hmr' || (typeof url === 'string' && (url.includes('vite-hmr') || url.includes('token=')))) {
+              var fake = new EventTarget();
+              fake.readyState = 1; // WebSocket.OPEN
+              fake.send = function () {};
+              fake.close = function () {};
+              setTimeout(function () {
+                fake.dispatchEvent(new Event('open'));
+              }, 0);
+              return fake;
+            }
+            return new OrigWS(url, proto);
+          };
+          window.WebSocket.prototype = OrigWS.prototype;
+          window.WebSocket.CONNECTING = OrigWS.CONNECTING;
+          window.WebSocket.OPEN = OrigWS.OPEN;
+          window.WebSocket.CLOSING = OrigWS.CLOSING;
+          window.WebSocket.CLOSED = OrigWS.CLOSED;
+        }
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Rekapan Teh Kota</title>
+    <meta name="description" content="Aplikasi pencatatan stok harian, pengeluaran, perhitungan omset, dan analisis AI untuk cabang Sompok dan Suyudono Teh Kota." />
+    <meta property="og:title" content="Rekapan Teh Kota" />
+    <meta property="og:description" content="Aplikasi pencatatan stok harian, pengeluaran, perhitungan omset, dan analisis AI untuk cabang Sompok dan Suyudono Teh Kota." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#064e3b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Teh Kota" />
+    <link rel="icon" type="image/jpeg" href="/assets/aistudio/images_b8dc7357.jpg" />
+    <link rel="apple-touch-icon" href="/assets/aistudio/images_b8dc7357.jpg" />
+    <!-- Google Fonts: Plus Jakarta Sans & DM Serif Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body class="bg-slate-50 text-slate-900 antialiased font-sans selection:bg-emerald-500 selection:text-white">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

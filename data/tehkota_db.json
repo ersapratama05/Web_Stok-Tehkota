@@ -1,0 +1,32 @@
+{
+  "users": [
+    {
+      "id": "usr_sompok",
+      "username": "kasir.sompok",
+      "passwordHash": "sompok123",
+      "name": "Kasir Sompok",
+      "email": "kasir.sompok@tehkota.com",
+      "role": "kasir",
+      "branch": "Sompok"
+    },
+    {
+      "id": "usr_suyudono",
+      "username": "kasir.suyudono",
+      "passwordHash": "suyudono123",
+      "name": "Kasir Suyudono",
+      "email": "kasir.suyudono@tehkota.com",
+      "role": "kasir",
+      "branch": "Suyudono"
+    },
+    {
+      "id": "usr_owner",
+      "username": "Tehkota321",
+      "passwordHash": "Tehkota321",
+      "name": "Owner Teh Kota",
+      "email": "owner@tehkota.com",
+      "role": "admin",
+      "branch": "All"
+    }
+  ],
+  "records": []
+}
