@@ -25,6 +25,14 @@ export interface CupDetail {
   calculatedSo: number; // (slop * 50) + pcs
 }
 
+export interface GulaDetail {
+  gulaAmbil: number;   // Gula ambil baru hari ini
+  gulaKemarin: number; // Gula kemarin
+  sisaGula: number;    // Sisa gula fisik (belum cair)
+  gulaCair: number;    // Gula cair
+  habisGula: number;   // Rumus: (ambil + gulaKemarin) - sisaGula - gulaCair
+}
+
 export interface StockItemRow {
   name: string;
   category: ItemCategory;
@@ -44,6 +52,24 @@ export interface ExpenseItem {
   amount: number;
 }
 
+export interface AuditChangeDetail {
+  field: string;
+  label: string;
+  before: any;
+  after: any;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  recordId: string;
+  branch: Branch;
+  date: string;
+  editedBy: string;
+  timestamp: string;
+  note?: string;
+  changes: AuditChangeDetail[];
+}
+
 export type RekapStatus = 'draft' | 'saved' | 'final';
 
 export interface RekapRecord {
@@ -54,6 +80,9 @@ export interface RekapRecord {
   createdAt: string;
   updatedAt: string;
   createdBy: string; // user id or name
+  lastEditedBy?: string; // User who last modified the record
+  lastEditedAt?: string; // Timestamp of last modification
+  revisionCount?: number; // Number of revisions/edits
   status: RekapStatus;
   stocks: StockItemRow[];
   expenses: ExpenseItem[];
@@ -61,7 +90,9 @@ export interface RekapRecord {
   totalPengeluaran: number; // Auto sum of expenses
   qris: number; // Non-tunai
   omsetAkhir: number; // Omset Bersih = totalOmset - totalPengeluaran - qris
+  gulaDetail?: GulaDetail; // Rekap kebutuhan gula & perhitungan otomatis
   notes?: string;
+  auditLogs?: AuditLogEntry[]; // History of changes made from any device
 }
 
 export interface DashboardStats {

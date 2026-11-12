@@ -65,7 +65,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           <div className="relative z-10">
             <div className="w-24 h-24 rounded-full mx-auto mb-3 bg-white p-1 shadow-xl border-3 border-emerald-400 overflow-hidden flex items-center justify-center">
               <img
-                src="/assets/aistudio/images_b8dc7357.jpg"
+                src="/assets/aistudio/image_764559de.png"
                 alt="Logo Teh Kota"
                 className="w-full h-full object-contain rounded-full"
                 onError={(e) => {

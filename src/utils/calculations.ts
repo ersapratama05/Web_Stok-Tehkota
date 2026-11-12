@@ -23,6 +23,24 @@ export function calculateCupSO(slop: number, pcs: number): number {
 }
 
 /**
+ * Rumus Perhitungan Gula:
+ * habis gula = (ambil + gula kemarin) - sisa gula - gula cair
+ */
+export function calculateHabisGula(
+  gulaAmbil: number | string | undefined | null,
+  gulaKemarin: number | string | undefined | null,
+  sisaGula: number | string | undefined | null,
+  gulaCair: number | string | undefined | null
+): number {
+  const ambil = Number(gulaAmbil) || 0;
+  const kemarin = Number(gulaKemarin) || 0;
+  const sisa = Number(sisaGula) || 0;
+  const cair = Number(gulaCair) || 0;
+  const result = (ambil + kemarin) - sisa - cair;
+  return Math.round(result * 100) / 100;
+}
+
+/**
  * Total Pengeluaran otomatis dari seluruh baris form pengeluaran
  */
 export function calculateTotalPengeluaran(expenses: ExpenseItem[]): number {

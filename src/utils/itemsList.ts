@@ -61,7 +61,7 @@ export const TEH_KOTA_ITEMS: BaseItemConfig[] = [
   { name: 'BROWN SUGAR', category: 'Coffee Series', unit: 'porsi', defaultSa: 0 },
   { name: 'CREAMY MACHIATO', category: 'Coffee Series', unit: 'porsi', defaultSa: 0 },
   { name: 'COOKIES AND CREAM', category: 'Coffee Series', unit: 'porsi', defaultSa: 0 },
-  { name: 'Espresso Latte', category: 'Coffee Series', unit: 'porsi', defaultSa: 0 },
+  { name: 'ESPRESSO LATTE', category: 'Coffee Series', unit: 'porsi', defaultSa: 0 },
 ];
 
 export const CATEGORIES_ORDER: ItemCategory[] = [

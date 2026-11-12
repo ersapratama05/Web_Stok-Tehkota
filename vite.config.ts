@@ -12,6 +12,13 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['icon.svg'],
+        workbox: {
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,jpeg,jpg}'],
+        },
         manifest: {
           id: '/',
           name: 'Rekapan Teh Kota',
@@ -24,16 +31,16 @@ export default defineConfig(() => {
           scope: '/',
           icons: [
             {
-              src: '/icon.svg',
+              src: '/assets/aistudio/image_764559de.png',
               sizes: '192x192',
-              type: 'image/svg+xml',
-              purpose: 'any',
+              type: 'image/png',
+              purpose: 'any maskable',
             },
             {
-              src: '/icon.svg',
+              src: '/assets/aistudio/image_764559de.png',
               sizes: '512x512',
-              type: 'image/svg+xml',
-              purpose: 'any',
+              type: 'image/png',
+              purpose: 'any maskable',
             },
           ],
         },

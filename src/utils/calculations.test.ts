@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   calculateStokAkhir,
   calculateCupSO,
+  calculateHabisGula,
   calculateTotalPengeluaran,
   calculateOmsetAkhir,
   calculateStokSelisih,
@@ -31,6 +32,21 @@ test('Rumus SO CUP: 1 slop = 50 pcs', () => {
 
   // 0 slop + 37 pcs = 37 pcs
   assert.equal(calculateCupSO(0, 37), 37);
+});
+
+test('Rumus Habis Gula = (Ambil + Kemarin) - Sisa Gula - Gula Cair', () => {
+  // Ambil: 10, Kemarin: 5, Sisa: 3, Cair: 2 -> (10 + 5) - 3 - 2 = 10
+  assert.equal(calculateHabisGula(10, 5, 3, 2), 10);
+
+  // Ambil: 20, Kemarin: 0, Sisa: 5, Cair: 3 -> (20 + 0) - 5 - 3 = 12
+  assert.equal(calculateHabisGula(20, 0, 5, 3), 12);
+
+  // Decimal case: Ambil 12.5, Kemarin 2.5, Sisa 4, Cair 1 -> (15) - 5 = 10
+  assert.equal(calculateHabisGula(12.5, 2.5, 4, 1), 10);
+
+  // Zero / empty inputs
+  assert.equal(calculateHabisGula(0, 0, 0, 0), 0);
+  assert.equal(calculateHabisGula(null, undefined, '', 0), 0);
 });
 
 test('Total Pengeluaran otomatis dari seluruh baris', () => {

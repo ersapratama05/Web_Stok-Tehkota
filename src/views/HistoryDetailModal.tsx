@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { RekapRecord } from '../types';
 import { formatDateIndo, formatNumberId, formatRupiah } from '../utils/calculations';
 import {
@@ -20,6 +21,9 @@ import {
   Receipt,
   Download,
   AlertTriangle,
+  Scale,
+  History,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface HistoryDetailModalProps {
@@ -35,9 +39,14 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
   onEdit,
   onDeleteSuccess,
 }) => {
+  const { user } = useAuth();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showAuditLogs, setShowAuditLogs] = useState(false);
+
+  // Permission check: Cashier can only edit their own branch, Owner can edit both
+  const canEdit = user?.role === 'admin' || user?.branch === record.branch;
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -65,7 +74,7 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
               <Receipt className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base sm:text-lg font-bold text-white">
                   Detail Rekapan Cabang {record.branch}
                 </h3>
@@ -78,9 +87,19 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
                 >
                   {record.status === 'draft' ? 'Draf' : 'Tersimpan'}
                 </span>
+                {record.revisionCount !== undefined && record.revisionCount > 0 && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-300 text-blue-950 border border-blue-400">
+                    Revisi #{record.revisionCount}
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-emerald-200">
-                {formatDateIndo(record.date)} • Kasir: {record.createdBy} • Jam {record.timeStr || '-'}
+              <p className="text-xs text-emerald-200 mt-0.5">
+                {formatDateIndo(record.date)} • Diinput: {record.createdBy} {record.timeStr ? `(${record.timeStr})` : ''}
+                {record.lastEditedBy && (
+                  <span className="text-amber-300 font-medium ml-1">
+                    • Diedit: {record.lastEditedBy}
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -97,23 +116,32 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
         {/* Action Toolbar: Edit, Delete, Exports */}
         <div className="bg-slate-50 px-4 sm:px-5 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                onClose();
-                onEdit(record);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>Edit Rekapan</span>
-            </button>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Hapus</span>
-            </button>
+            {canEdit ? (
+              <button
+                onClick={() => {
+                  onClose();
+                  onEdit(record);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-sm"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Edit Rekapan</span>
+              </button>
+            ) : (
+              <span className="text-xs text-slate-600 bg-slate-200/80 px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-700" />
+                <span>Hanya Kasir {record.branch} &amp; Owner yang dapat mengedit</span>
+              </span>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus</span>
+              </button>
+            )}
           </div>
 
           {/* Download buttons: PDF, JPG, PNG, CSV */}
@@ -254,6 +282,46 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
             </div>
           </div>
 
+          {/* Rekap Kebutuhan Gula if available */}
+          {record.gulaDetail && (
+            <div className="bg-emerald-50/60 border border-emerald-200 rounded-xl p-4 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-emerald-800" />
+                  <h4 className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                    Rekap Kebutuhan & Perhitungan Gula Pasir
+                  </h4>
+                </div>
+                <span className="text-xs font-bold text-emerald-900 bg-white px-2.5 py-1 rounded-lg border border-emerald-200">
+                  Habis Gula: <strong className="font-mono text-emerald-800">{record.gulaDetail.habisGula}</strong>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="bg-white p-2.5 rounded-lg border border-emerald-100">
+                  <span className="text-[10px] text-slate-500 uppercase block">Gula Ambil</span>
+                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.gulaAmbil}</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-emerald-100">
+                  <span className="text-[10px] text-slate-500 uppercase block">Gula Kemarin</span>
+                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.gulaKemarin}</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-emerald-100">
+                  <span className="text-[10px] text-slate-500 uppercase block">Sisa Gula</span>
+                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.sisaGula}</span>
+                </div>
+                <div className="bg-white p-2.5 rounded-lg border border-emerald-100">
+                  <span className="text-[10px] text-slate-500 uppercase block">Gula Cair</span>
+                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.gulaCair}</span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-emerald-900 font-mono">
+                Rumus: ({record.gulaDetail.gulaAmbil} + {record.gulaDetail.gulaKemarin}) - {record.gulaDetail.sisaGula} - {record.gulaDetail.gulaCair} = <strong>{record.gulaDetail.habisGula}</strong>
+              </p>
+            </div>
+          )}
+
           {/* Tabel Pengeluaran */}
           <div>
             <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
@@ -288,6 +356,58 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
             <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700">
               <strong className="block text-slate-900 mb-1">Catatan Operasional:</strong>
               <p className="whitespace-pre-line">{record.notes}</p>
+            </div>
+          )}
+
+          {/* SECTION: RIWAYAT PERUBAHAN (LOG EDIT MULTI-PERANGKAT) */}
+          {record.auditLogs && record.auditLogs.length > 0 && (
+            <div className="bg-blue-50/60 rounded-xl border border-blue-200 p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                  <History className="w-4 h-4 text-blue-700" />
+                  <span>Riwayat Perubahan Data (Log Edit Multi-Perangkat)</span>
+                  <span className="bg-blue-200 text-blue-900 px-1.5 py-0.2 rounded-full text-[10px]">
+                    {record.auditLogs.length} revisi
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAuditLogs(!showAuditLogs)}
+                  className="text-[11px] font-bold text-blue-700 hover:text-blue-900 hover:underline"
+                >
+                  {showAuditLogs ? 'Sembunyikan' : 'Lihat Detail'}
+                </button>
+              </div>
+
+              {showAuditLogs && (
+                <div className="space-y-2 pt-1 border-t border-blue-200/80">
+                  {record.auditLogs.map((log) => (
+                    <div key={log.id} className="bg-white p-2.5 rounded-lg border border-blue-100 text-[11px] space-y-1">
+                      <div className="flex items-center justify-between font-semibold text-slate-800">
+                        <span className="text-blue-900 font-bold">{log.editedBy}</span>
+                        <span className="text-slate-500 font-mono">
+                          {new Date(log.timestamp).toLocaleString('id-ID', {
+                            dateStyle: 'short',
+                            timeStyle: 'medium',
+                          })}
+                        </span>
+                      </div>
+                      {log.changes && log.changes.length > 0 && (
+                        <ul className="list-disc list-inside text-slate-600 pl-1 space-y-0.5">
+                          {log.changes.map((c, i) => (
+                            <li key={i}>
+                              <span className="font-medium text-slate-800">{c.label}:</span>{' '}
+                              <span className="text-rose-600 line-through mr-1">{String(c.before)}</span>
+                              <span>➔</span>
+                              <span className="text-emerald-700 font-bold ml-1">{String(c.after)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -13,7 +13,7 @@ import { RekapRecord } from './types';
 import { WifiOff } from 'lucide-react';
 
 function AppContent() {
-  const { user, isOnline } = useAuth();
+  const { user, isOnline, setActiveBranch } = useAuth();
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   const [selectedRecordForDetail, setSelectedRecordForDetail] = useState<RekapRecord | null>(null);
   const [rekapFormTargetDate, setRekapFormTargetDate] = useState<string | undefined>(undefined);
@@ -32,6 +32,9 @@ function AppContent() {
   };
 
   const handleEditRecord = (record: RekapRecord) => {
+    if (user.role === 'admin' || user.branch === record.branch) {
+      setActiveBranch(record.branch);
+    }
     setRekapFormTargetDate(record.date);
     setRekapFormTargetRecordId(record.id);
     setActiveTab('rekapan');

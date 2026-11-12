@@ -9,9 +9,32 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
-  const { user, activeBranch, setActiveBranch, isOnline, syncStatus, lastSavedTime, logout } = useAuth();
+  const { user, activeBranch, setActiveBranch, isOnline, syncStatus, lastSavedTime, syncNotice, setSyncNotice, refreshCentralData, logout } = useAuth();
   const [wibTime, setWibTime] = useState<string>('');
   const [branchDropdown, setBranchDropdown] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleForceUpdate = async () => {
+    setIsUpdating(true);
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
+      }
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        for (const name of cacheNames) {
+          await caches.delete(name);
+        }
+      }
+    } catch (e) {
+      console.warn('Cache clear error:', e);
+    }
+    // Hard refresh with query param to bypass any intermediate proxy caches
+    window.location.href = window.location.origin + window.location.pathname + '?update=' + Date.now();
+  };
 
   // Live real-time WIB clock (ticking every 1s)
   useEffect(() => {
@@ -40,80 +63,88 @@ export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
   };
 
   const getSyncBadge = () => {
-    if (!isOnline) {
+    if (!isOnline || syncStatus === 'offline') {
       return (
-        <span className="flex items-center gap-1 text-[11px] font-medium text-amber-200 bg-amber-900/40 px-2 py-0.5 rounded-md border border-amber-500/30">
+        <span className="flex items-center gap-1 text-[11px] font-medium text-amber-200 bg-amber-900/60 px-2.5 py-0.5 rounded-md border border-amber-500/40">
           <WifiOff className="w-3 h-3 text-amber-400" />
-          <span>Offline (Lokal)</span>
+          <span>Offline (Tersimpan Lokal Sementara)</span>
         </span>
       );
     }
     if (syncStatus === 'saving') {
       return (
-        <span className="flex items-center gap-1 text-[11px] font-medium text-blue-200 bg-blue-900/40 px-2 py-0.5 rounded-md border border-blue-500/30 animate-pulse">
+        <span className="flex items-center gap-1 text-[11px] font-medium text-blue-200 bg-blue-900/60 px-2.5 py-0.5 rounded-md border border-blue-500/40 animate-pulse">
           <RefreshCw className="w-3 h-3 animate-spin text-blue-300" />
-          <span>Menyimpan...</span>
+          <span>Menyinkronkan Data...</span>
         </span>
       );
     }
     if (syncStatus === 'error') {
       return (
-        <span className="flex items-center gap-1 text-[11px] font-medium text-rose-200 bg-rose-900/40 px-2 py-0.5 rounded-md border border-rose-500/30">
+        <span className="flex items-center gap-1 text-[11px] font-medium text-rose-200 bg-rose-900/60 px-2.5 py-0.5 rounded-md border border-rose-500/40">
           <AlertCircle className="w-3 h-3 text-rose-400" />
-          <span>Gagal Sinkron</span>
+          <span>Gagal Menyimpan ke Server</span>
+        </span>
+      );
+    }
+    if (syncStatus === 'connected') {
+      return (
+        <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-200 bg-emerald-950/60 px-2.5 py-0.5 rounded-md border border-emerald-500/40">
+          <Wifi className="w-3 h-3 text-emerald-400" />
+          <span>Terhubung ke Database Pusat (Multi-Perangkat Aktif)</span>
         </span>
       );
     }
     return (
-      <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-200 bg-emerald-950/40 px-2 py-0.5 rounded-md border border-emerald-600/30">
+      <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-200 bg-emerald-950/60 px-2.5 py-0.5 rounded-md border border-emerald-500/40">
         <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-        <span>Tersimpan {lastSavedTime ? `(${lastSavedTime})` : ''}</span>
+        <span>Tersimpan di Server (Multi-Perangkat Aktif) {lastSavedTime ? `• ${lastSavedTime}` : ''}</span>
       </span>
     );
   };
 
   return (
-    <header className="sticky top-0 z-30 bg-[#064e3b] text-white shadow-md border-b border-emerald-800">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-3">
-        {/* Brand & Logo */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden bg-white border-2 border-emerald-400 shadow-sm shrink-0 flex items-center justify-center p-0.5">
-            <img
-              src="/assets/aistudio/images_b8dc7357.jpg"
-              alt="Logo Teh Kota"
-              className="w-full h-full object-contain rounded-full"
-              onError={(e) => {
-                // fallback to SVG icon if image not reachable
-                (e.target as HTMLImageElement).src = '/icon.svg';
-              }}
-            />
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h1 className="font-serif text-lg sm:text-2xl font-bold tracking-tight text-white leading-none">
-                Teh Kota
-              </h1>
-              <span className="hidden xs:inline-block text-[10px] tracking-wider uppercase font-bold bg-amber-400 text-emerald-950 px-1.5 py-0.5 rounded font-sans">
-                Kasir
-              </span>
+    <>
+      <header className="sticky top-0 z-30 bg-[#064e3b] text-white shadow-md border-b border-emerald-800">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-3">
+          {/* Brand & Logo */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full overflow-hidden bg-white border-2 border-emerald-400 shadow-sm shrink-0 flex items-center justify-center p-0.5">
+              <img
+                src="/assets/aistudio/image_764559de.png"
+                alt="Logo Teh Kota"
+                className="w-full h-full object-contain rounded-full"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/icon.svg';
+                }}
+              />
             </div>
-            <p className="text-[11px] sm:text-xs text-emerald-200 font-medium">
-              Rekapan Harian Cabang
-            </p>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h1 className="font-serif text-lg sm:text-2xl font-bold tracking-tight text-white leading-none">
+                  Teh Kota
+                </h1>
+                <span className="hidden xs:inline-block text-[10px] tracking-wider uppercase font-bold bg-amber-400 text-emerald-950 px-1.5 py-0.5 rounded font-sans">
+                  {user?.role === 'admin' ? 'Owner' : 'Kasir'}
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-emerald-200 font-medium">
+                Sistem Terpusat Cabang {activeBranch}
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Center: Live WIB Clock & Sync Badge */}
-        <div className="hidden md:flex flex-col items-center">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100 bg-emerald-950/60 px-3 py-1 rounded-full border border-emerald-700/50">
-            <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span className="tabular-nums">{wibTime}</span>
+          {/* Center: Live WIB Clock & Sync Badge */}
+          <div className="hidden md:flex flex-col items-center">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-100 bg-emerald-950/60 px-3 py-1 rounded-full border border-emerald-700/50">
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <span className="tabular-nums">{wibTime}</span>
+            </div>
+            <div className="mt-1">{getSyncBadge()}</div>
           </div>
-          <div className="mt-1">{getSyncBadge()}</div>
-        </div>
 
-        {/* Right Zone: Branch Selector & Profile */}
-        <div className="flex items-center gap-2">
+          {/* Right Zone: Branch Selector & Profile */}
+          <div className="flex items-center gap-2">
           {/* Branch Dropdown */}
           <div className="relative">
             <button
@@ -152,6 +183,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
             )}
           </div>
 
+          {/* Force Refresh / Update Button */}
+          <button
+            type="button"
+            onClick={handleForceUpdate}
+            disabled={isUpdating}
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-emerald-950 font-bold text-xs shadow-sm transition active:scale-95"
+            title="Klik jika tampilan HP belum berubah (Bersihkan Cache & Perbarui)"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isUpdating ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{isUpdating ? 'Memperbarui...' : 'Perbarui'}</span>
+          </button>
+
           {/* In-App PWA Install Button */}
           <PWAInstallButton />
 
@@ -163,7 +206,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
           >
             <div className="w-6 h-6 rounded-full overflow-hidden bg-white border border-emerald-400 shrink-0">
               <img
-                src="/assets/aistudio/images_b8dc7357.jpg"
+                src="/assets/aistudio/image_764559de.png"
                 alt="Avatar"
                 className="w-full h-full object-contain rounded-full"
               />
@@ -173,14 +216,50 @@ export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
         </div>
       </div>
 
-      {/* Mobile Sub-strip: live time & sync status for mobile screen */}
+      {/* Mobile Sub-strip: live time, sync status & mobile refresh button */}
       <div className="md:hidden px-3 py-1 bg-emerald-950/80 border-t border-emerald-800/60 flex items-center justify-between text-[11px] text-emerald-200">
         <div className="flex items-center gap-1.5 tabular-nums font-medium">
           <Clock className="w-3 h-3 text-amber-400" />
           <span>{wibTime}</span>
         </div>
-        <div>{getSyncBadge()}</div>
+        <div className="flex items-center gap-2">
+          {getSyncBadge()}
+          <button
+            type="button"
+            onClick={handleForceUpdate}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/40 text-[10px] font-bold"
+            title="Segarkan tampilan terbaru"
+          >
+            <RefreshCw className={`w-2.5 h-2.5 ${isUpdating ? 'animate-spin' : ''}`} />
+            <span>Perbarui</span>
+          </button>
+        </div>
       </div>
     </header>
+
+    {/* Live Cross-Device Sync Notification Bar */}
+    {syncNotice && (
+      <div className="bg-emerald-700 text-white px-4 py-2 text-xs flex items-center justify-between shadow-md border-b border-emerald-600 animate-in slide-in-from-top-2 duration-200">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+          <span className="font-semibold">{syncNotice}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => refreshCentralData()}
+            className="px-2 py-0.5 rounded bg-emerald-900/60 hover:bg-emerald-950 font-bold text-[11px] border border-emerald-500/40 transition"
+          >
+            Muat Ulang
+          </button>
+          <button
+            onClick={() => setSyncNotice(null)}
+            className="text-emerald-200 hover:text-white font-bold px-1"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    )}
+  </>
   );
 };

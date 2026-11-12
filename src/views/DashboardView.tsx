@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Branch, DashboardStats, RekapRecord } from '../types';
 import { formatRupiah, formatDateIndo } from '../utils/calculations';
-import { clearBranchDrafts, computeLocalDashboardStats, getCachedRecords, setCachedRecords } from '../utils/storage';
+import { clearBranchDrafts, computeLocalDashboardStats, getCachedRecords, setCachedRecords, saveRecordToLocal } from '../utils/storage';
 import {
   TrendingUp,
   Wallet,
@@ -43,11 +43,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch(`/api/dashboard?branch=${activeBranch}`);
+      const res = await fetch(`/api/dashboard?branch=${activeBranch}`, {
+        cache: 'no-store',
+      });
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         setStats(data);
+        if (data.recentRekapan && Array.isArray(data.recentRekapan)) {
+          for (const rec of data.recentRekapan) {
+            saveRecordToLocal(rec);
+          }
+        }
         return;
       }
       // Fallback lokal jika API server tidak merespon JSON (misal static Vercel)
@@ -96,6 +103,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     fetchDashboardData();
   }, [activeBranch]);
 
+  // Real-time synchronization listener across connected devices
+  useEffect(() => {
+    const handleSync = () => {
+      fetchDashboardData();
+    };
+    window.addEventListener('tehkota:sync-record', handleSync);
+    return () => window.removeEventListener('tehkota:sync-record', handleSync);
+  }, [activeBranch]);
+
   // Current month label (e.g. "November 2026")
   const currentMonthLabel = new Intl.DateTimeFormat('id-ID', {
     month: 'long',
@@ -129,7 +145,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="absolute right-4 sm:right-7 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center">
           <div className="w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full bg-white p-1.5 shadow-2xl border-4 border-emerald-400/80 flex items-center justify-center overflow-hidden">
             <img
-              src="/assets/aistudio/images_b8dc7357.jpg"
+              src="/assets/aistudio/image_764559de.png"
               alt="Logo Resmi Teh Kota"
               className="w-full h-full object-contain rounded-full"
             />

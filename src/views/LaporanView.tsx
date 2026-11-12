@@ -32,6 +32,8 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
     const m = String(now.getMonth() + 1).padStart(2, '0');
     return `${y}-${m}`;
   });
+  const [rangeFilter, setRangeFilter] = useState<'all_month' | 'today' | 'yesterday' | '7days' | '30days'>('all_month');
+  const [searchFilter, setSearchFilter] = useState<string>('');
 
   const [reportData, setReportData] = useState<MonthlyReportData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -42,7 +44,9 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/reports/monthly?branch=${selectedBranch}&month=${selectedMonth}`);
+      const res = await fetch(`/api/reports/monthly?branch=${selectedBranch}&month=${selectedMonth}`, {
+        cache: 'no-store',
+      });
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
@@ -61,6 +65,15 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
 
   useEffect(() => {
     fetchMonthlyReport();
+  }, [selectedBranch, selectedMonth]);
+
+  // Real-time synchronization listener: auto-refresh when any device saves
+  useEffect(() => {
+    const handleSync = () => {
+      fetchMonthlyReport();
+    };
+    window.addEventListener('tehkota:sync-record', handleSync);
+    return () => window.removeEventListener('tehkota:sync-record', handleSync);
   }, [selectedBranch, selectedMonth]);
 
   // Handle clicking a day in the table
@@ -94,7 +107,36 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
   };
 
   // SVG Chart Dimensions & Computations
-  const dailyList = reportData?.dailyData || [];
+  // Quick date filtering computations
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const yDate = new Date(now);
+  yDate.setDate(yDate.getDate() - 1);
+  const yesterdayStr = `${yDate.getFullYear()}-${pad(yDate.getMonth() + 1)}-${pad(yDate.getDate())}`;
+
+  const d7Date = new Date(now);
+  d7Date.setDate(d7Date.getDate() - 7);
+  const min7Date = `${d7Date.getFullYear()}-${pad(d7Date.getMonth() + 1)}-${pad(d7Date.getDate())}`;
+
+  const d30Date = new Date(now);
+  d30Date.setDate(d30Date.getDate() - 30);
+  const min30Date = `${d30Date.getFullYear()}-${pad(d30Date.getMonth() + 1)}-${pad(d30Date.getDate())}`;
+
+  const allDailyList = reportData?.dailyData || [];
+  const filteredDailyList = allDailyList.filter((d) => {
+    if (rangeFilter === 'today' && d.date !== todayStr) return false;
+    if (rangeFilter === 'yesterday' && d.date !== yesterdayStr) return false;
+    if (rangeFilter === '7days' && d.date < min7Date) return false;
+    if (rangeFilter === '30days' && d.date < min30Date) return false;
+    if (searchFilter.trim() !== '') {
+      const q = searchFilter.toLowerCase();
+      if (!d.date.includes(q) && !d.dayName.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const dailyList = allDailyList;
   const maxOmset = Math.max(
     ...dailyList.map((d) => Math.max(d.omsetKotor, d.omsetBersih)),
     2000000
@@ -108,10 +150,14 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
           <div>
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center gap-2">
               <FileBarChart className="w-5 h-5 text-emerald-800" />
-              <span>Laporan &amp; Grafik Bulanan</span>
+              <span>Laporan &amp; Riwayat Terpusat</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 flex items-center gap-1 border border-emerald-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                Live Sync
+              </span>
             </h2>
             <p className="text-xs text-slate-600 mt-0.5">
-              Pantau tren omset kotor, omset bersih, dan riwayat harian outlet
+              Pantau tren omset kotor, omset bersih, dan riwayat harian seluruh cabang secara real-time
             </p>
           </div>
 
@@ -120,7 +166,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition self-start sm:self-auto"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Segarkan</span>
+            <span>Segarkan Data</span>
           </button>
         </div>
 
@@ -164,6 +210,43 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
               />
               <Calendar className="w-4 h-4 text-slate-600 absolute left-3 top-2.5" />
             </div>
+          </div>
+        </div>
+
+        {/* Quick Range Tabs: Hari Ini, Kemarin, 7 Hari, 30 Hari, Bulan Ini */}
+        <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar">
+            <span className="text-[11px] font-bold text-slate-500 mr-1 shrink-0">Filter Cepat:</span>
+            {[
+              { id: 'all_month', label: 'Bulan Ini' },
+              { id: 'today', label: 'Hari Ini' },
+              { id: 'yesterday', label: 'Kemarin' },
+              { id: '7days', label: '7 Hari Terakhir' },
+              { id: '30days', label: '30 Hari Terakhir' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setRangeFilter(tab.id as any)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
+                  rangeFilter === tab.id
+                    ? 'bg-emerald-800 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="Cari tanggal / hari..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              className="px-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none w-full sm:w-48 bg-slate-50"
+            />
           </div>
         </div>
       </div>
@@ -471,61 +554,84 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {dailyList.map((day, idx) => (
-                <tr
-                  key={day.date}
-                  onClick={() => handleDayClick(day.date, day.hasRekap, day.rekapId)}
-                  className={`hover:bg-emerald-50/40 cursor-pointer transition ${
-                    day.hasRekap ? (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50') : 'bg-slate-50/20 text-slate-400'
-                  }`}
-                >
-                  <td className="py-2.5 px-4 font-semibold text-slate-900">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold">{day.dayName}</span>
-                      <span className="text-[11px] text-slate-600">{day.date}</span>
-                    </div>
-                  </td>
-
-                  <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-800">
-                    {day.hasRekap ? formatRupiah(day.omsetKotor) : '-'}
-                  </td>
-
-                  <td className="py-2.5 px-3 text-right font-mono tabular-nums text-rose-700">
-                    {day.hasRekap ? formatRupiah(day.pengeluaran) : '-'}
-                  </td>
-
-                  <td className="py-2.5 px-3 text-right font-mono tabular-nums text-blue-700">
-                    {day.hasRekap ? formatRupiah(day.qris) : '-'}
-                  </td>
-
-                  <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800 tabular-nums">
-                    {day.hasRekap ? formatRupiah(day.omsetBersih) : '-'}
-                  </td>
-
-                  <td className="py-2.5 px-3 text-center">
-                    {day.hasRekap ? (
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          day.status === 'draft'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                      >
-                        {day.status === 'draft' ? 'Draf' : 'Tersimpan'}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-slate-600">Belum diisi</span>
-                    )}
-                  </td>
-
-                  <td className="py-2.5 px-3 text-center">
-                    <span className="text-emerald-700 hover:text-emerald-900 font-bold text-[11px] inline-flex items-center gap-1">
-                      {day.hasRekap ? 'Lihat Detail' : '+ Buat Rekap'}
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </span>
+              {filteredDailyList.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-slate-500">
+                    Tidak ada rekapan untuk filter yang dipilih ({rangeFilter !== 'all_month' ? rangeFilter : 'bulan ini'}{searchFilter ? `, pencarian "${searchFilter}"` : ''}).
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredDailyList.map((day, idx) => (
+                  <tr
+                    key={day.date}
+                    onClick={() => handleDayClick(day.date, day.hasRekap, day.rekapId)}
+                    className={`hover:bg-emerald-50/40 cursor-pointer transition ${
+                      day.hasRekap ? (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50') : 'bg-slate-50/20 text-slate-400'
+                    }`}
+                  >
+                    <td className="py-2.5 px-4 font-semibold text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold">{day.dayName}</span>
+                        <span className="text-[11px] text-slate-600">{day.date}</span>
+                      </div>
+                    </td>
+
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-slate-800">
+                      {day.hasRekap ? formatRupiah(day.omsetKotor) : '-'}
+                    </td>
+
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-rose-700">
+                      {day.hasRekap ? formatRupiah(day.pengeluaran) : '-'}
+                    </td>
+
+                    <td className="py-2.5 px-3 text-right font-mono tabular-nums text-blue-700">
+                      {day.hasRekap ? formatRupiah(day.qris) : '-'}
+                    </td>
+
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800 tabular-nums">
+                      {day.hasRekap ? formatRupiah(day.omsetBersih) : '-'}
+                    </td>
+
+                    <td className="py-2.5 px-3 text-center">
+                      {day.hasRekap ? (
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            day.status === 'draft'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}
+                        >
+                          {day.status === 'draft' ? 'Draf' : 'Tersimpan'}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-600">Belum diisi</span>
+                      )}
+                    </td>
+
+                    <td className="py-2.5 px-3 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="text-emerald-700 hover:text-emerald-900 font-bold text-[11px] inline-flex items-center gap-0.5">
+                          {day.hasRekap ? 'Detail' : '+ Buat'}
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
+                        {day.hasRekap && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onNavigateToRekap(day.date);
+                            }}
+                            className="text-[10px] font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 px-2 py-0.5 rounded border border-amber-200 transition"
+                            title="Edit rekapan tanggal ini langsung"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

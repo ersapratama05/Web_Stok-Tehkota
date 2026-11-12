@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Branch } from '../types';
 import { PWAInstallButton } from '../components/PWAInstallButton';
 import { usePWAInstall } from '../hooks/usePWAInstall';
+import { APP_VERSION, APP_RELEASE_DATE, RELEASE_HISTORY } from '../utils/version';
 import {
   User,
   Mail,
@@ -14,6 +15,8 @@ import {
   Database,
   HelpCircle,
   ExternalLink,
+  RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 
 interface ProfileViewProps {
@@ -23,6 +26,28 @@ interface ProfileViewProps {
 export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout }) => {
   const { user, activeBranch, setActiveBranch, logout, isOnline } = useAuth();
   const { isInstalled } = usePWAInstall();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleForceUpdate = async () => {
+    setIsRefreshing(true);
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
+      }
+      if ('caches' in window) {
+        const names = await caches.keys();
+        for (const n of names) {
+          await caches.delete(n);
+        }
+      }
+    } catch (e) {
+      console.warn('Error clearing cache:', e);
+    }
+    window.location.href = window.location.origin + window.location.pathname + '?update=' + Date.now();
+  };
 
   const handleLogoutClick = () => {
     logout();
@@ -38,7 +63,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout }) => {
           <div className="absolute -bottom-12 left-6">
             <div className="w-24 h-24 rounded-full bg-white p-1 shadow-xl border-2 border-emerald-400 overflow-hidden flex items-center justify-center">
               <img
-                src="/assets/aistudio/images_b8dc7357.jpg"
+                src="/assets/aistudio/image_764559de.png"
                 alt="Profil Teh Kota"
                 className="w-full h-full object-contain rounded-full bg-white"
               />
@@ -144,6 +169,67 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout }) => {
             )}
           </div>
           <PWAInstallButton />
+        </div>
+      </div>
+
+      {/* Force Refresh & Cache Buster / Owner Update Management Card */}
+      <div className="bg-white rounded-2xl border-2 border-emerald-500/50 shadow-sm p-5 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">
+                  Manajemen Update Aplikasi &amp; Pembaruan
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400 text-emerald-950">
+                  v{APP_VERSION} Terpasang
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Tanggal Rilis: {APP_RELEASE_DATE} • Status: <span className="text-emerald-700 font-bold">Terbaru &amp; Aman</span>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Release History Accordion / List */}
+        <div className="space-y-2 pt-2 border-t border-slate-100">
+          <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+            Riwayat Pembaruan &amp; Fitur Baru:
+          </span>
+          <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+            {RELEASE_HISTORY.map((rel) => (
+              <div key={rel.version} className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                <div className="flex items-center justify-between font-bold text-slate-900">
+                  <span>Versi {rel.version} ({rel.title})</span>
+                  <span className="text-[10px] text-slate-500">{rel.date}</span>
+                </div>
+                <ul className="space-y-1 text-slate-600 pl-3">
+                  {rel.features.map((feat, idx) => (
+                    <li key={idx} className="list-disc">{feat}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-950 space-y-2 pt-3">
+          <p className="leading-relaxed">
+            Jika di HP Anda atau perangkat kasir belum muncul fitur kalkulasi gula atau format cetak 2 kolom, klik tombol di bawah untuk membersihkan cache dan memuat versi terbaru tanpa kehilangan data.
+          </p>
+          <button
+            type="button"
+            onClick={handleForceUpdate}
+            disabled={isRefreshing}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#064e3b] hover:bg-[#047857] text-white font-bold text-xs shadow-md transition active:scale-95"
+          >
+            <RefreshCw className={`w-4 h-4 text-amber-300 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Memeriksa & Memperbarui Sistem...' : 'Periksa Pembaruan & Muat Ulang'}</span>
+          </button>
         </div>
       </div>
 
