@@ -9,7 +9,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
-  const { user, activeBranch, setActiveBranch, isOnline, syncStatus, lastSavedTime, syncNotice, setSyncNotice, refreshCentralData, logout } = useAuth();
+  const { user, activeBranch, setActiveBranch, isOnline, syncStatus, lastSavedTime, syncNotice, setSyncNotice, storageHealth, refreshCentralData } = useAuth();
   const [wibTime, setWibTime] = useState<string>('');
   const [branchDropdown, setBranchDropdown] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -63,11 +63,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
   };
 
   const getSyncBadge = () => {
+    const updatedSuffix = lastSavedTime ? ` • Terakhir diperbarui: ${lastSavedTime}` : '';
     if (!isOnline || syncStatus === 'offline') {
       return (
         <span className="flex items-center gap-1 text-[11px] font-medium text-amber-200 bg-amber-900/60 px-2.5 py-0.5 rounded-md border border-amber-500/40">
           <WifiOff className="w-3 h-3 text-amber-400" />
-          <span>Offline (Tersimpan Lokal Sementara)</span>
+          <span>Offline (Antrean Lokal Sementara){updatedSuffix}</span>
         </span>
       );
     }
@@ -75,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
       return (
         <span className="flex items-center gap-1 text-[11px] font-medium text-blue-200 bg-blue-900/60 px-2.5 py-0.5 rounded-md border border-blue-500/40 animate-pulse">
           <RefreshCw className="w-3 h-3 animate-spin text-blue-300" />
-          <span>Menyinkronkan Data...</span>
+          <span>Sedang menyimpan...</span>
         </span>
       );
     }
@@ -83,7 +84,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
       return (
         <span className="flex items-center gap-1 text-[11px] font-medium text-rose-200 bg-rose-900/60 px-2.5 py-0.5 rounded-md border border-rose-500/40">
           <AlertCircle className="w-3 h-3 text-rose-400" />
-          <span>Gagal Menyimpan ke Server</span>
+          <span>Gagal tersimpan{updatedSuffix}</span>
         </span>
       );
     }
@@ -91,14 +92,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
       return (
         <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-200 bg-emerald-950/60 px-2.5 py-0.5 rounded-md border border-emerald-500/40">
           <Wifi className="w-3 h-3 text-emerald-400" />
-          <span>Terhubung ke Database Pusat (Multi-Perangkat Aktif)</span>
+          <span>Online • Database Pusat{updatedSuffix}</span>
         </span>
       );
     }
     return (
       <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-200 bg-emerald-950/60 px-2.5 py-0.5 rounded-md border border-emerald-500/40">
         <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-        <span>Tersimpan di Server (Multi-Perangkat Aktif) {lastSavedTime ? `• ${lastSavedTime}` : ''}</span>
+        <span>Online • Berhasil tersimpan{updatedSuffix}</span>
       </span>
     );
   };
@@ -236,6 +237,25 @@ export const Header: React.FC<HeaderProps> = ({ onOpenProfile }) => {
         </div>
       </div>
     </header>
+
+    {/* Warning if deployed on Vercel without PostgreSQL DATABASE_URL */}
+    {storageHealth?.ephemeralWarning && (
+      <div className="bg-amber-600 text-white px-4 py-2 text-xs flex items-center justify-between gap-2 shadow-sm border-b border-amber-700">
+        <div className="flex items-center gap-2 font-semibold">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>
+            Perhatian: Server Vercel belum terhubung ke PostgreSQL Cloud (`DATABASE_URL`). Sinkronisasi permanen antarperangkat memerlukan variabel `DATABASE_URL` di Vercel.
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onOpenProfile}
+          className="px-2.5 py-1 rounded bg-white/20 hover:bg-white/30 font-bold text-[11px] shrink-0"
+        >
+          Detail DB
+        </button>
+      </div>
+    )}
 
     {/* Live Cross-Device Sync Notification Bar */}
     {syncNotice && (

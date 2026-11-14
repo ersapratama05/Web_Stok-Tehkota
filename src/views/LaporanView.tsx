@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Branch, MonthlyReportData, RekapRecord } from '../types';
-import { formatDateIndo, formatRupiah } from '../utils/calculations';
+import { apiFetch } from '../utils/api';
+import {
+  formatRupiah,
+  getCurrentMonthStr,
+  getJakartaDateOffsetStr,
+  getTodayDateStr,
+  getYesterdayDateStr,
+} from '../utils/calculations';
 import { computeLocalMonthlyReport, getCachedRecords, getLocalDraft } from '../utils/storage';
 import {
   FileBarChart,
   Calendar,
-  TrendingUp,
-  Wallet,
-  Receipt,
   ChevronRight,
   RotateCcw,
   BarChart3,
@@ -24,48 +28,57 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
   onOpenRecordDetail,
   onNavigateToRekap,
 }) => {
-  const { user, activeBranch, setActiveBranch } = useAuth();
-  const [selectedBranch, setSelectedBranch] = useState<Branch | 'All'>(activeBranch);
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    return `${y}-${m}`;
-  });
+  const { user, activeBranch } = useAuth();
+  const [selectedBranch, setSelectedBranch] = useState<Branch | 'All'>(
+    user?.role !== 'admin' && user?.branch ? user.branch : activeBranch
+  );
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => getCurrentMonthStr());
   const [rangeFilter, setRangeFilter] = useState<'all_month' | 'today' | 'yesterday' | '7days' | '30days'>('all_month');
   const [searchFilter, setSearchFilter] = useState<string>('');
 
   const [reportData, setReportData] = useState<MonthlyReportData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
 
-  const fetchMonthlyReport = async () => {
+  useEffect(() => {
+    if (user?.role !== 'admin' && user?.branch && selectedBranch !== user.branch) {
+      setSelectedBranch(user.branch);
+    }
+  }, [user, selectedBranch]);
+
+  const fetchMonthlyReport = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setLoadError(null);
+    const effectiveBranch = user?.role !== 'admin' && user?.branch ? user.branch : selectedBranch;
     try {
-      const res = await fetch(`/api/reports/monthly?branch=${selectedBranch}&month=${selectedMonth}`, {
-        cache: 'no-store',
-      });
+      const res = await apiFetch(`/api/reports/monthly?branch=${effectiveBranch}&month=${selectedMonth}`);
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         setReportData(data);
         return;
       }
-      const localData = computeLocalMonthlyReport(selectedBranch, selectedMonth);
-      setReportData(localData);
+      if (!navigator.onLine) {
+        setReportData(computeLocalMonthlyReport(effectiveBranch, selectedMonth));
+      } else {
+        const errData = await res.json().catch(() => null);
+        setLoadError(errData?.error || 'Gagal memuat laporan terbaru dari database pusat.');
+      }
     } catch {
-      const localData = computeLocalMonthlyReport(selectedBranch, selectedMonth);
-      setReportData(localData);
+      if (!navigator.onLine) {
+        setReportData(computeLocalMonthlyReport(effectiveBranch, selectedMonth));
+      } else {
+        setLoadError('Koneksi ke server pusat terputus saat memuat laporan.');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBranch, selectedMonth, user?.role, user?.branch]);
 
   useEffect(() => {
     fetchMonthlyReport();
-  }, [selectedBranch, selectedMonth]);
+  }, [fetchMonthlyReport]);
 
   // Real-time synchronization listener: auto-refresh when any device saves
   useEffect(() => {
@@ -73,14 +86,18 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
       fetchMonthlyReport();
     };
     window.addEventListener('tehkota:sync-record', handleSync);
-    return () => window.removeEventListener('tehkota:sync-record', handleSync);
-  }, [selectedBranch, selectedMonth]);
+    window.addEventListener('tehkota:sync-transfer', handleSync);
+    return () => {
+      window.removeEventListener('tehkota:sync-record', handleSync);
+      window.removeEventListener('tehkota:sync-transfer', handleSync);
+    };
+  }, [fetchMonthlyReport]);
 
   // Handle clicking a day in the table
   const handleDayClick = async (dateStr: string, hasRekap: boolean, rekapId?: string) => {
     if (hasRekap && rekapId) {
       try {
-        const res = await fetch(`/api/records/${rekapId}`);
+        const res = await apiFetch(`/api/records/${rekapId}`);
         const contentType = res.headers.get('content-type') || '';
         if (res.ok && contentType.includes('application/json')) {
           const data = await res.json();
@@ -90,38 +107,25 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
       } catch {
         // fallback
       }
-      // Cek cache lokal
       const cached = getCachedRecords().find((r) => r.id === rekapId || r.date === dateStr);
       if (cached) {
         onOpenRecordDetail(cached);
         return;
       }
-      const draft = getLocalDraft(selectedBranch === 'All' ? 'Sompok' : selectedBranch, dateStr);
+      const draft = getLocalDraft(selectedBranch === 'All' ? activeBranch : selectedBranch, dateStr);
       if (draft) {
         onOpenRecordDetail(draft);
         return;
       }
     }
-    // If no record, open form with this date
     onNavigateToRekap(dateStr);
   };
 
-  // SVG Chart Dimensions & Computations
-  // Quick date filtering computations
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-  const yDate = new Date(now);
-  yDate.setDate(yDate.getDate() - 1);
-  const yesterdayStr = `${yDate.getFullYear()}-${pad(yDate.getMonth() + 1)}-${pad(yDate.getDate())}`;
-
-  const d7Date = new Date(now);
-  d7Date.setDate(d7Date.getDate() - 7);
-  const min7Date = `${d7Date.getFullYear()}-${pad(d7Date.getMonth() + 1)}-${pad(d7Date.getDate())}`;
-
-  const d30Date = new Date(now);
-  d30Date.setDate(d30Date.getDate() - 30);
-  const min30Date = `${d30Date.getFullYear()}-${pad(d30Date.getMonth() + 1)}-${pad(d30Date.getDate())}`;
+  // WIB Quick date filtering computations
+  const todayStr = getTodayDateStr();
+  const yesterdayStr = getYesterdayDateStr();
+  const min7Date = getJakartaDateOffsetStr(-7);
+  const min30Date = getJakartaDateOffsetStr(-30);
 
   const allDailyList = reportData?.dailyData || [];
   const filteredDailyList = allDailyList.filter((d) => {
@@ -169,6 +173,19 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
             <span>Segarkan Data</span>
           </button>
         </div>
+
+        {loadError && (
+          <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-900 text-xs font-semibold flex items-center justify-between gap-2">
+            <span>{loadError}</span>
+            <button
+              type="button"
+              onClick={fetchMonthlyReport}
+              className="px-2.5 py-1 rounded-lg bg-rose-700 text-white hover:bg-rose-800 text-[11px] font-bold shrink-0"
+            >
+              Coba Lagi
+            </button>
+          </div>
+        )}
 
         {/* Filter Controls: Branch & Month */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -251,13 +268,13 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
         </div>
       </div>
 
-      {/* KPI Cards: Bulanan */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* KPI Cards: Bulanan + Total Gula (KG) */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
           <span className="text-[10px] font-bold text-slate-600 uppercase block mb-1">
             Omset Kotor Bulanan
           </span>
-          <span className="text-base sm:text-xl font-bold text-slate-900 font-mono tabular-nums">
+          <span className="text-base sm:text-lg font-bold text-slate-900 font-mono tabular-nums">
             {reportData ? formatRupiah(reportData.totalOmsetKotor) : '...'}
           </span>
         </div>
@@ -266,7 +283,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
           <span className="text-[10px] font-bold text-emerald-800 uppercase block mb-1">
             Omset Bersih Bulanan
           </span>
-          <span className="text-base sm:text-xl font-bold text-emerald-800 font-mono tabular-nums">
+          <span className="text-base sm:text-lg font-bold text-emerald-800 font-mono tabular-nums">
             {reportData ? formatRupiah(reportData.totalOmsetBersih) : '...'}
           </span>
         </div>
@@ -275,17 +292,26 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
           <span className="text-[10px] font-bold text-rose-800 uppercase block mb-1">
             Total Pengeluaran
           </span>
-          <span className="text-base sm:text-xl font-bold text-rose-700 font-mono tabular-nums">
+          <span className="text-base sm:text-lg font-bold text-rose-700 font-mono tabular-nums">
             {reportData ? formatRupiah(reportData.totalPengeluaran) : '...'}
           </span>
         </div>
 
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
           <span className="text-[10px] font-bold text-blue-800 uppercase block mb-1">
-            Total QRIS (Non-Tunai)
+            Total QRIS
           </span>
-          <span className="text-base sm:text-xl font-bold text-blue-700 font-mono tabular-nums">
+          <span className="text-base sm:text-lg font-bold text-blue-700 font-mono tabular-nums">
             {reportData ? formatRupiah(reportData.totalQris) : '...'}
+          </span>
+        </div>
+
+        <div className="col-span-2 sm:col-span-1 bg-amber-50/60 rounded-2xl p-4 border border-amber-200 shadow-sm">
+          <span className="text-[10px] font-bold text-amber-900 uppercase block mb-1">
+            Total Gula Habis
+          </span>
+          <span className="text-base sm:text-lg font-bold text-amber-900 font-mono tabular-nums">
+            {reportData ? `${reportData.totalGulaHabis ?? 0} KG` : '...'}
           </span>
         </div>
       </div>
@@ -549,6 +575,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
                 <th className="py-2.5 px-3 text-right">Pengeluaran</th>
                 <th className="py-2.5 px-3 text-right">QRIS</th>
                 <th className="py-2.5 px-3 text-right">Omset Bersih</th>
+                <th className="py-2.5 px-3 text-right">Gula (KG)</th>
                 <th className="py-2.5 px-3 text-center">Status</th>
                 <th className="py-2.5 px-3 text-center">Aksi</th>
               </tr>
@@ -556,7 +583,7 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredDailyList.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-xs text-slate-500">
+                  <td colSpan={8} className="py-8 text-center text-xs text-slate-500">
                     Tidak ada rekapan untuk filter yang dipilih ({rangeFilter !== 'all_month' ? rangeFilter : 'bulan ini'}{searchFilter ? `, pencarian "${searchFilter}"` : ''}).
                   </td>
                 </tr>
@@ -590,6 +617,10 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
 
                     <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-800 tabular-nums">
                       {day.hasRekap ? formatRupiah(day.omsetBersih) : '-'}
+                    </td>
+
+                    <td className="py-2.5 px-3 text-right font-mono font-semibold text-amber-800 tabular-nums">
+                      {day.hasRekap ? `${day.habisGula ?? 0} KG` : '-'}
                     </td>
 
                     <td className="py-2.5 px-3 text-center">

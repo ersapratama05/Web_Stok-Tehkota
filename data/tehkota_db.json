@@ -3,30 +3,2989 @@
     {
       "id": "usr_sompok",
       "username": "kasir.sompok",
-      "passwordHash": "sompok123",
+      "passwordHash": "scrypt$6a7f12231b73e30af8f3d857a7b9a636$84a7716a57e259b11c2c16e802abae80275d0c99ca5dbb518d053c0771101df47cfa206d2ae30e49449710e3006cb50d0f33e2a66a7ce7207e3743b53cb5a74f",
       "name": "Kasir Sompok",
       "email": "kasir.sompok@tehkota.com",
       "role": "kasir",
-      "branch": "Sompok"
+      "branch": "Sompok",
+      "active": true
     },
     {
       "id": "usr_suyudono",
       "username": "kasir.suyudono",
-      "passwordHash": "suyudono123",
+      "passwordHash": "scrypt$4e764462327b791306da9c81d1be3f6e$637d09e83c6a858f8ce1c16e195e1e7eb4120e44340d76b218261645288f9fc1c966557ce965f1a6853da608abfb22c1c83cbd578b681b6bf887d37cbdc788a5",
       "name": "Kasir Suyudono",
       "email": "kasir.suyudono@tehkota.com",
       "role": "kasir",
-      "branch": "Suyudono"
+      "branch": "Suyudono",
+      "active": true
     },
     {
       "id": "usr_owner",
       "username": "Tehkota321",
-      "passwordHash": "Tehkota321",
+      "passwordHash": "scrypt$3e99efe7f99c034f2a1986835d4edae3$6979a0976af4518b18610545ece075e5969992100941c30fd3d8accdd272567af009d5a949e7941117988199bd2de82732c497ea7cd1b629df2cb95786411f93",
       "name": "Owner Teh Kota",
       "email": "owner@tehkota.com",
       "role": "admin",
-      "branch": "All"
+      "branch": "All",
+      "active": true
     }
   ],
-  "records": []
+  "records": [
+    {
+      "id": "rek_sompok_20261103",
+      "branch": "Sompok",
+      "date": "2026-11-03",
+      "timeStr": "21:30:00",
+      "createdAt": "2026-11-03T14:30:00.000Z",
+      "updatedAt": "2026-11-03T14:30:00.000Z",
+      "createdBy": "Kasir Sompok",
+      "status": "saved",
+      "stocks": [
+        {
+          "name": "CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pcs",
+          "sa": 605,
+          "inQty": 0,
+          "outQty": 240,
+          "st": 365,
+          "so": 365,
+          "cupDetail": {
+            "slop": 7,
+            "pcs": 15,
+            "rusakPcs": 3,
+            "calculatedSo": 365
+          }
+        },
+        {
+          "name": "SEALER",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "roll",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "SEDOTAN KECIL",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "TUTUP CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "PLASTIK SATUAN",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "PLASTIK 15",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "PLASTIK 21",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "PLASTIK 28",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "PLASTIK JUMBO",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "PLASTIK SAMPAH",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "SUSU UHT",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kotak",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "SUSU CARNATION",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kaleng",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "GULA PASIR",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kg",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "Yoghurt Lemon",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "Yoghurt Leci",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -5,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -9,
+          "so": -9
+        },
+        {
+          "name": "Yoghurt Mango",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "Yoghurt Blueberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -7,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -9,
+          "so": -9
+        },
+        {
+          "name": "Yoghurt Strawberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -7,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -9,
+          "so": -9
+        },
+        {
+          "name": "Choco Vanilla",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -7,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -8,
+          "so": -8
+        },
+        {
+          "name": "Choco Matcha",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -6,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "Choco Banana",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -6,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -9,
+          "so": -9
+        },
+        {
+          "name": "Choco Klepon",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -5,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -8,
+          "so": -8
+        },
+        {
+          "name": "Choco Avocado",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -6,
+          "so": -6
+        },
+        {
+          "name": "DAUN TEH",
+          "category": "Tea Series",
+          "unit": "pack",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "LEMON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "LECI",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "PASSION",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "MELON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "APEL",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "MANGGA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "Thai Tea",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "GRAPE",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "MATCHA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "SILVERQUEN",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "REDVELVET",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "TARO",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "Royal Choco",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "TIRAMISU",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 16,
+          "inQty": 0,
+          "outQty": 16,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "VIETNAM COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -6,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -10,
+          "so": -10
+        },
+        {
+          "name": "VANILLA LATE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -5,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "AVOCADO COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -5,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "BROWN SUGAR",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -6,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -10,
+          "so": -10
+        },
+        {
+          "name": "CREAMY MACHIATO",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "COOKIES AND CREAM",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "ESPRESSO LATTE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -6,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -10,
+          "so": -10
+        }
+      ],
+      "expenses": [
+        {
+          "id": "exp_seed_1",
+          "name": "Es Batu Kristal (3 sak)",
+          "amount": 45000
+        },
+        {
+          "id": "exp_seed_2",
+          "name": "Sabun cuci & spons",
+          "amount": 15000
+        }
+      ],
+      "totalOmset": 1920000,
+      "totalPengeluaran": 60000,
+      "qris": 780000,
+      "omsetAkhir": 1080000,
+      "gulaDetail": {
+        "gulaAmbil": 10,
+        "gulaKemarin": 2,
+        "sisaGula": 3,
+        "gulaCair": 1,
+        "habisGula": 8
+      },
+      "notes": "Rekapan operasional harian Cabang Sompok berjalan lancar."
+    },
+    {
+      "id": "rek_suyudono_20261103",
+      "branch": "Suyudono",
+      "date": "2026-11-03",
+      "timeStr": "21:30:00",
+      "createdAt": "2026-11-03T14:30:00.000Z",
+      "updatedAt": "2026-11-03T14:30:00.000Z",
+      "createdBy": "Kasir Suyudono",
+      "status": "saved",
+      "stocks": [
+        {
+          "name": "CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pcs",
+          "sa": 600,
+          "inQty": 0,
+          "outQty": 205,
+          "st": 395,
+          "so": 395,
+          "cupDetail": {
+            "slop": 7,
+            "pcs": 45,
+            "rusakPcs": 0,
+            "calculatedSo": 395
+          }
+        },
+        {
+          "name": "SEALER",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "roll",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "SEDOTAN KECIL",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "TUTUP CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "PLASTIK SATUAN",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "PLASTIK 15",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "PLASTIK 21",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "PLASTIK 28",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "PLASTIK JUMBO",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "PLASTIK SAMPAH",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 4,
+          "so": 4
+        },
+        {
+          "name": "SUSU UHT",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kotak",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "SUSU CARNATION",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kaleng",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "GULA PASIR",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kg",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "Yoghurt Lemon",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -6,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -9,
+          "so": -9
+        },
+        {
+          "name": "Yoghurt Leci",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -6,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "Yoghurt Mango",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "Yoghurt Blueberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -7,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -10,
+          "so": -10
+        },
+        {
+          "name": "Yoghurt Strawberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -5,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -9,
+          "so": -9
+        },
+        {
+          "name": "Choco Vanilla",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -5,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -9,
+          "so": -9
+        },
+        {
+          "name": "Choco Matcha",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -5,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -8,
+          "so": -8
+        },
+        {
+          "name": "Choco Banana",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "Choco Klepon",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -5,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -6,
+          "so": -6
+        },
+        {
+          "name": "Choco Avocado",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "DAUN TEH",
+          "category": "Tea Series",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "LEMON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "LECI",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "PASSION",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "MELON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "APEL",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "MANGGA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "Thai Tea",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "GRAPE",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "MATCHA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "SILVERQUEN",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "REDVELVET",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "TARO",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "Royal Choco",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "TIRAMISU",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 7,
+          "so": 7
+        },
+        {
+          "name": "VIETNAM COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -6,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -8,
+          "so": -8
+        },
+        {
+          "name": "VANILLA LATE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -7,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -8,
+          "so": -8
+        },
+        {
+          "name": "AVOCADO COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -6,
+          "so": -6
+        },
+        {
+          "name": "BROWN SUGAR",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -5,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -8,
+          "so": -8
+        },
+        {
+          "name": "CREAMY MACHIATO",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -5,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -8,
+          "so": -8
+        },
+        {
+          "name": "COOKIES AND CREAM",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -7,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -8,
+          "so": -8
+        },
+        {
+          "name": "ESPRESSO LATTE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -7,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -9,
+          "so": -9
+        }
+      ],
+      "expenses": [
+        {
+          "id": "exp_seed_1",
+          "name": "Es Batu Kristal (3 sak)",
+          "amount": 45000
+        },
+        {
+          "id": "exp_seed_2",
+          "name": "Plastik Sampah Besar",
+          "amount": 15000
+        }
+      ],
+      "totalOmset": 1640000,
+      "totalPengeluaran": 60000,
+      "qris": 610000,
+      "omsetAkhir": 970000,
+      "gulaDetail": {
+        "gulaAmbil": 10,
+        "gulaKemarin": 2,
+        "sisaGula": 3,
+        "gulaCair": 1,
+        "habisGula": 8
+      },
+      "notes": "Rekapan operasional harian Cabang Suyudono berjalan lancar."
+    },
+    {
+      "id": "rek_sompok_20261102",
+      "branch": "Sompok",
+      "date": "2026-11-02",
+      "timeStr": "21:30:00",
+      "createdAt": "2026-11-02T14:30:00.000Z",
+      "updatedAt": "2026-11-02T14:30:00.000Z",
+      "createdBy": "Kasir Sompok",
+      "status": "saved",
+      "stocks": [
+        {
+          "name": "CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pcs",
+          "sa": 815,
+          "inQty": 0,
+          "outQty": 210,
+          "st": 605,
+          "so": 605,
+          "cupDetail": {
+            "slop": 12,
+            "pcs": 5,
+            "rusakPcs": 3,
+            "calculatedSo": 605
+          }
+        },
+        {
+          "name": "SEALER",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "roll",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "SEDOTAN KECIL",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "TUTUP CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK SATUAN",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "PLASTIK 15",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "PLASTIK 21",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "PLASTIK 28",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "PLASTIK JUMBO",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "PLASTIK SAMPAH",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "SUSU UHT",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kotak",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "SUSU CARNATION",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kaleng",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "GULA PASIR",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kg",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "Yoghurt Lemon",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -1,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "Yoghurt Leci",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "Yoghurt Mango",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "Yoghurt Blueberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "Yoghurt Strawberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "Choco Vanilla",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "Choco Matcha",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -6,
+          "so": -6
+        },
+        {
+          "name": "Choco Banana",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -6,
+          "so": -6
+        },
+        {
+          "name": "Choco Klepon",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "Choco Avocado",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "DAUN TEH",
+          "category": "Tea Series",
+          "unit": "pack",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "LEMON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "LECI",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "PASSION",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "MELON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "APEL",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "MANGGA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "Thai Tea",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "GRAPE",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "MATCHA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "SILVERQUEN",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "REDVELVET",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "TARO",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "Royal Choco",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "TIRAMISU",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 9,
+          "inQty": 25,
+          "outQty": 18,
+          "st": 16,
+          "so": 16
+        },
+        {
+          "name": "VIETNAM COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -6,
+          "so": -6
+        },
+        {
+          "name": "VANILLA LATE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -1,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "AVOCADO COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -1,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "BROWN SUGAR",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -6,
+          "so": -6
+        },
+        {
+          "name": "CREAMY MACHIATO",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -1,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "COOKIES AND CREAM",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "ESPRESSO LATTE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -6,
+          "so": -6
+        }
+      ],
+      "expenses": [
+        {
+          "id": "exp_seed_1",
+          "name": "Es Batu Kristal (4 sak)",
+          "amount": 60000
+        },
+        {
+          "id": "exp_seed_2",
+          "name": "Kresek Sampah Jumbo",
+          "amount": 18000
+        }
+      ],
+      "totalOmset": 1680000,
+      "totalPengeluaran": 78000,
+      "qris": 640000,
+      "omsetAkhir": 962000,
+      "gulaDetail": {
+        "gulaAmbil": 10,
+        "gulaKemarin": 2,
+        "sisaGula": 3,
+        "gulaCair": 1,
+        "habisGula": 8
+      },
+      "notes": "Rekapan operasional harian Cabang Sompok berjalan lancar."
+    },
+    {
+      "id": "rek_suyudono_20261102",
+      "branch": "Suyudono",
+      "date": "2026-11-02",
+      "timeStr": "21:30:00",
+      "createdAt": "2026-11-02T14:30:00.000Z",
+      "updatedAt": "2026-11-02T14:30:00.000Z",
+      "createdBy": "Kasir Suyudono",
+      "status": "saved",
+      "stocks": [
+        {
+          "name": "CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pcs",
+          "sa": 830,
+          "inQty": 0,
+          "outQty": 230,
+          "st": 600,
+          "so": 600,
+          "cupDetail": {
+            "slop": 12,
+            "pcs": 0,
+            "rusakPcs": 0,
+            "calculatedSo": 600
+          }
+        },
+        {
+          "name": "SEALER",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "roll",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "SEDOTAN KECIL",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "TUTUP CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK SATUAN",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "PLASTIK 15",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "PLASTIK 21",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "PLASTIK 28",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "PLASTIK JUMBO",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "PLASTIK SAMPAH",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 8,
+          "inQty": 0,
+          "outQty": 2,
+          "st": 6,
+          "so": 6
+        },
+        {
+          "name": "SUSU UHT",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kotak",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "SUSU CARNATION",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kaleng",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "GULA PASIR",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kg",
+          "sa": 9,
+          "inQty": 0,
+          "outQty": 1,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "Yoghurt Lemon",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -6,
+          "so": -6
+        },
+        {
+          "name": "Yoghurt Leci",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -6,
+          "so": -6
+        },
+        {
+          "name": "Yoghurt Mango",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "Yoghurt Blueberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "Yoghurt Strawberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": -1,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "Choco Vanilla",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "Choco Matcha",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "Choco Banana",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "Choco Klepon",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "Choco Avocado",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "DAUN TEH",
+          "category": "Tea Series",
+          "unit": "pack",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "LEMON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "LECI",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "PASSION",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "MELON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "APEL",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "MANGGA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "Thai Tea",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "GRAPE",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "MATCHA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "SILVERQUEN",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "REDVELVET",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "TARO",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "Royal Choco",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "TIRAMISU",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 10,
+          "inQty": 0,
+          "outQty": 10,
+          "st": 0,
+          "so": 0
+        },
+        {
+          "name": "VIETNAM COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -2,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -6,
+          "so": -6
+        },
+        {
+          "name": "VANILLA LATE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "AVOCADO COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -1,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "BROWN SUGAR",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "CREAMY MACHIATO",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -5,
+          "so": -5
+        },
+        {
+          "name": "COOKIES AND CREAM",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -3,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -7,
+          "so": -7
+        },
+        {
+          "name": "ESPRESSO LATTE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": -4,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -7,
+          "so": -7
+        }
+      ],
+      "expenses": [
+        {
+          "id": "exp_seed_1",
+          "name": "Es Batu Kristal (4 sak)",
+          "amount": 60000
+        },
+        {
+          "id": "exp_seed_2",
+          "name": "Sedotan tambahan",
+          "amount": 20000
+        }
+      ],
+      "totalOmset": 1840000,
+      "totalPengeluaran": 80000,
+      "qris": 720000,
+      "omsetAkhir": 1040000,
+      "gulaDetail": {
+        "gulaAmbil": 10,
+        "gulaKemarin": 2,
+        "sisaGula": 3,
+        "gulaCair": 1,
+        "habisGula": 8
+      },
+      "notes": "Rekapan operasional harian Cabang Suyudono berjalan lancar."
+    },
+    {
+      "id": "rek_sompok_20261101",
+      "branch": "Sompok",
+      "date": "2026-11-01",
+      "timeStr": "21:30:00",
+      "createdAt": "2026-11-01T14:30:00.000Z",
+      "updatedAt": "2026-11-01T14:30:00.000Z",
+      "createdBy": "Kasir Sompok",
+      "status": "saved",
+      "stocks": [
+        {
+          "name": "CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pcs",
+          "sa": 0,
+          "inQty": 1000,
+          "outQty": 185,
+          "st": 815,
+          "so": 815,
+          "cupDetail": {
+            "slop": 16,
+            "pcs": 15,
+            "rusakPcs": 3,
+            "calculatedSo": 815
+          }
+        },
+        {
+          "name": "SEALER",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "roll",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "SEDOTAN KECIL",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "TUTUP CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "PLASTIK SATUAN",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK 15",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK 21",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK 28",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK JUMBO",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK SAMPAH",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "SUSU UHT",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kotak",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "SUSU CARNATION",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kaleng",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "GULA PASIR",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kg",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "Yoghurt Lemon",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -1,
+          "so": -1
+        },
+        {
+          "name": "Yoghurt Leci",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "Yoghurt Mango",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "Yoghurt Blueberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "Yoghurt Strawberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "Choco Vanilla",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "Choco Matcha",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "Choco Banana",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "Choco Klepon",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "Choco Avocado",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "DAUN TEH",
+          "category": "Tea Series",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "LEMON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "LECI",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "PASSION",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "MELON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "APEL",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "MANGGA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "Thai Tea",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "GRAPE",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "MATCHA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "SILVERQUEN",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "REDVELVET",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "TARO",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "Royal Choco",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "TIRAMISU",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 16,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "VIETNAM COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "VANILLA LATE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -1,
+          "so": -1
+        },
+        {
+          "name": "AVOCADO COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -1,
+          "so": -1
+        },
+        {
+          "name": "BROWN SUGAR",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "CREAMY MACHIATO",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -1,
+          "so": -1
+        },
+        {
+          "name": "COOKIES AND CREAM",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "ESPRESSO LATTE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        }
+      ],
+      "expenses": [
+        {
+          "id": "exp_seed_1",
+          "name": "Es Batu Kristal (3 sak)",
+          "amount": 45000
+        },
+        {
+          "id": "exp_seed_2",
+          "name": "Air Galon isi ulang",
+          "amount": 8000
+        }
+      ],
+      "totalOmset": 1480000,
+      "totalPengeluaran": 53000,
+      "qris": 520000,
+      "omsetAkhir": 907000,
+      "gulaDetail": {
+        "gulaAmbil": 10,
+        "gulaKemarin": 2,
+        "sisaGula": 3,
+        "gulaCair": 1,
+        "habisGula": 8
+      },
+      "notes": "Rekapan operasional harian Cabang Sompok berjalan lancar."
+    },
+    {
+      "id": "rek_suyudono_20261101",
+      "branch": "Suyudono",
+      "date": "2026-11-01",
+      "timeStr": "21:30:00",
+      "createdAt": "2026-11-01T14:30:00.000Z",
+      "updatedAt": "2026-11-01T14:30:00.000Z",
+      "createdBy": "Kasir Suyudono",
+      "status": "saved",
+      "stocks": [
+        {
+          "name": "CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pcs",
+          "sa": 0,
+          "inQty": 1000,
+          "outQty": 170,
+          "st": 830,
+          "so": 830,
+          "cupDetail": {
+            "slop": 16,
+            "pcs": 30,
+            "rusakPcs": 3,
+            "calculatedSo": 830
+          }
+        },
+        {
+          "name": "SEALER",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "roll",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "SEDOTAN KECIL",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "TUTUP CUP",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "PLASTIK SATUAN",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK 15",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK 21",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK 28",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK JUMBO",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "PLASTIK SAMPAH",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 2,
+          "st": 8,
+          "so": 8
+        },
+        {
+          "name": "SUSU UHT",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kotak",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "SUSU CARNATION",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kaleng",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "GULA PASIR",
+          "category": "Perlengkapan / Bahan Pokok",
+          "unit": "kg",
+          "sa": 0,
+          "inQty": 10,
+          "outQty": 1,
+          "st": 9,
+          "so": 9
+        },
+        {
+          "name": "Yoghurt Lemon",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "Yoghurt Leci",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "Yoghurt Mango",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "Yoghurt Blueberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "Yoghurt Strawberry",
+          "category": "Yoghurt Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -1,
+          "so": -1
+        },
+        {
+          "name": "Choco Vanilla",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "Choco Matcha",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "Choco Banana",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "Choco Klepon",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "Choco Avocado",
+          "category": "Choco Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "DAUN TEH",
+          "category": "Tea Series",
+          "unit": "pack",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "LEMON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "LECI",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "PASSION",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "MELON",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "APEL",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "MANGGA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "Thai Tea",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "GRAPE",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "MATCHA",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "SILVERQUEN",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "REDVELVET",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "TARO",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "Royal Choco",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "TIRAMISU",
+          "category": "Tea Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 25,
+          "outQty": 15,
+          "st": 10,
+          "so": 10
+        },
+        {
+          "name": "VIETNAM COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 2,
+          "st": -2,
+          "so": -2
+        },
+        {
+          "name": "VANILLA LATE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "AVOCADO COFFEE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 1,
+          "st": -1,
+          "so": -1
+        },
+        {
+          "name": "BROWN SUGAR",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -4,
+          "so": -4
+        },
+        {
+          "name": "CREAMY MACHIATO",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "COOKIES AND CREAM",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 3,
+          "st": -3,
+          "so": -3
+        },
+        {
+          "name": "ESPRESSO LATTE",
+          "category": "Coffee Series",
+          "unit": "porsi",
+          "sa": 0,
+          "inQty": 0,
+          "outQty": 4,
+          "st": -4,
+          "so": -4
+        }
+      ],
+      "expenses": [
+        {
+          "id": "exp_seed_1",
+          "name": "Es Batu Kristal (3 sak)",
+          "amount": 45000
+        },
+        {
+          "id": "exp_seed_2",
+          "name": "Air Galon isi ulang",
+          "amount": 8000
+        }
+      ],
+      "totalOmset": 1360000,
+      "totalPengeluaran": 53000,
+      "qris": 490000,
+      "omsetAkhir": 817000,
+      "gulaDetail": {
+        "gulaAmbil": 10,
+        "gulaKemarin": 2,
+        "sisaGula": 3,
+        "gulaCair": 1,
+        "habisGula": 8
+      },
+      "notes": "Rekapan operasional harian Cabang Suyudono berjalan lancar."
+    }
+  ],
+  "transfers": [],
+  "auditLogs": [],
+  "backups": []
 }

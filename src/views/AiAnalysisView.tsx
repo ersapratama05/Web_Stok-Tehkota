@@ -1,12 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Branch, AiAnalysisResult, RekapRecord } from '../types';
+import { apiFetch } from '../utils/api';
 import {
   exportAiAnalysisToPdf,
   exportAiAnalysisToTxt,
   exportAiAnalysisToImage,
 } from '../utils/exportUtils';
-import { getCachedRecords, getLocalRecords } from '../utils/storage';
+import { getCachedRecords } from '../utils/storage';
 import {
   Sparkles,
   StopCircle,
@@ -16,20 +17,20 @@ import {
   AlertTriangle,
   TrendingUp,
   Package,
-  Layers,
   ArrowRightLeft,
   CheckCircle,
-  HelpCircle,
-  Calendar,
   Store,
   Download,
-  Zap,
 } from 'lucide-react';
 
 export const AiAnalysisView: React.FC = () => {
-  const { user, activeBranch } = useAuth();
+  const { user } = useAuth();
 
-  const [selectedBranches, setSelectedBranches] = useState<Branch[]>(['Sompok']);
+  const [selectedBranches, setSelectedBranches] = useState<Branch[]>(
+    user?.role !== 'admin' && (user?.branch === 'Sompok' || user?.branch === 'Suyudono')
+      ? [user.branch]
+      : ['Sompok']
+  );
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [promptNotes, setPromptNotes] = useState<string>('');
@@ -41,19 +42,16 @@ export const AiAnalysisView: React.FC = () => {
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const handleBranchToggle = (branch: Branch) => {
-    setSelectedBranches((prev) => {
-      if (prev.includes(branch)) {
-        if (prev.length === 1) return prev; // Keep at least one
-        return prev.filter((b) => b !== branch);
-      } else {
-        return [...prev, branch];
-      }
-    });
-  };
+  useEffect(() => {
+    if (user?.role !== 'admin' && (user?.branch === 'Sompok' || user?.branch === 'Suyudono')) {
+      setSelectedBranches([user.branch]);
+    }
+  }, [user]);
 
   const handleSelectBoth = () => {
-    setSelectedBranches(['Sompok', 'Suyudono']);
+    if (user?.role === 'admin') {
+      setSelectedBranches(['Sompok', 'Suyudono']);
+    }
   };
 
   /**
@@ -170,7 +168,7 @@ export const AiAnalysisView: React.FC = () => {
     abortControllerRef.current = abortController;
 
     try {
-      const res = await fetch('/api/ai/analyze', {
+      const res = await apiFetch('/api/ai/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -184,7 +182,8 @@ export const AiAnalysisView: React.FC = () => {
 
       const contentType = res.headers.get('content-type') || '';
       if (!res.ok) {
-        throw new Error(`Server returned status ${res.status}`);
+        const errBody = await res.json().catch(() => null);
+        throw new Error(errBody?.error || `Server returned status ${res.status}`);
       }
 
       if (contentType.includes('application/json')) {
@@ -279,8 +278,9 @@ export const AiAnalysisView: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
               type="button"
+              disabled={user?.role !== 'admin' && user?.branch !== 'Sompok'}
               onClick={() => setSelectedBranches(['Sompok'])}
-              className={`py-2 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition ${
+              className={`py-2 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition disabled:opacity-40 disabled:cursor-not-allowed ${
                 selectedBranches.length === 1 && selectedBranches.includes('Sompok')
                   ? 'bg-emerald-800 text-white border-emerald-800 shadow-sm'
                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -292,8 +292,9 @@ export const AiAnalysisView: React.FC = () => {
 
             <button
               type="button"
+              disabled={user?.role !== 'admin' && user?.branch !== 'Suyudono'}
               onClick={() => setSelectedBranches(['Suyudono'])}
-              className={`py-2 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition ${
+              className={`py-2 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition disabled:opacity-40 disabled:cursor-not-allowed ${
                 selectedBranches.length === 1 && selectedBranches.includes('Suyudono')
                   ? 'bg-emerald-800 text-white border-emerald-800 shadow-sm'
                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
@@ -305,8 +306,9 @@ export const AiAnalysisView: React.FC = () => {
 
             <button
               type="button"
+              disabled={user?.role !== 'admin'}
               onClick={handleSelectBoth}
-              className={`py-2 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition ${
+              className={`py-2 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition disabled:opacity-40 disabled:cursor-not-allowed ${
                 selectedBranches.length === 2
                   ? 'bg-amber-400 text-emerald-950 border-amber-500 shadow-sm'
                   : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'

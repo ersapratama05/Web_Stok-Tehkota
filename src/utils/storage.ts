@@ -1,4 +1,5 @@
 import { Branch, DashboardStats, MonthlyReportData, RekapRecord } from '../types';
+import { getCurrentMonthStr } from './calculations';
 
 const DRAFT_PREFIX = 'tehkota_draft_';
 const SYNC_QUEUE_KEY = 'tehkota_sync_queue';
@@ -62,7 +63,6 @@ export function addToSyncQueue(record: RekapRecord): void {
   try {
     const raw = localStorage.getItem(SYNC_QUEUE_KEY);
     const queue: SyncQueueItem[] = raw ? JSON.parse(raw) : [];
-    // Replace if already in queue for same id or branch+date
     const filtered = queue.filter(
       (q) => q.record.id !== record.id && !(q.record.branch === record.branch && q.record.date === record.date)
     );
@@ -134,7 +134,7 @@ export function getLocalRecords(branch?: Branch | 'All'): RekapRecord[] {
 }
 
 export function computeLocalDashboardStats(branch?: Branch | 'All', monthStr?: string): DashboardStats {
-  const targetMonth = monthStr || new Date().toISOString().slice(0, 7);
+  const targetMonth = monthStr || getCurrentMonthStr();
   const allRecords = getLocalRecords(branch);
   const monthly = allRecords.filter((r) => r.date.startsWith(targetMonth));
 
@@ -152,7 +152,7 @@ export function computeLocalDashboardStats(branch?: Branch | 'All', monthStr?: s
 
   const sortedRecent = [...allRecords]
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 10);
+    .slice(0, 7);
 
   return {
     branch: branch || 'All',
@@ -167,26 +167,32 @@ export function computeLocalDashboardStats(branch?: Branch | 'All', monthStr?: s
 }
 
 export function computeLocalMonthlyReport(branch?: Branch | 'All', monthStr?: string): MonthlyReportData {
-  const targetMonth = monthStr || new Date().toISOString().slice(0, 7);
+  const targetMonth = monthStr || getCurrentMonthStr();
   const [yearStr, monthNumStr] = targetMonth.split('-');
-  const year = parseInt(yearStr, 10) || new Date().getFullYear();
-  const month = parseInt(monthNumStr, 10) || new Date().getMonth() + 1;
+  const year = parseInt(yearStr, 10) || 2026;
+  const month = parseInt(monthNumStr, 10) || 1;
   const daysInMonth = new Date(year, month, 0).getDate();
 
   const records = getLocalRecords(branch).filter((r) => r.date.startsWith(targetMonth));
-  const recordsByDate = new Map<string, RekapRecord>();
-  records.forEach((r) => recordsByDate.set(r.date, r));
+  const recordsByDate = new Map<string, RekapRecord[]>();
+  records.forEach((r) => {
+    const arr = recordsByDate.get(r.date) || [];
+    arr.push(r);
+    recordsByDate.set(r.date, arr);
+  });
 
   let totalOmsetKotor = 0;
   let totalOmsetBersih = 0;
   let totalPengeluaran = 0;
   let totalQris = 0;
+  let totalGulaHabis = 0;
 
   for (const r of records) {
     totalOmsetKotor += r.totalOmset || 0;
     totalOmsetBersih += r.omsetAkhir || 0;
     totalPengeluaran += r.totalPengeluaran || 0;
     totalQris += r.qris || 0;
+    totalGulaHabis += r.gulaDetail?.habisGula || 0;
   }
 
   const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -195,20 +201,26 @@ export function computeLocalMonthlyReport(branch?: Branch | 'All', monthStr?: st
   for (let d = 1; d <= daysInMonth; d++) {
     const dayStr = String(d).padStart(2, '0');
     const fullDate = `${targetMonth}-${dayStr}`;
-    const dateObj = new Date(year, month - 1, d);
-    const dayName = dayNames[dateObj.getDay()];
-    const rec = recordsByDate.get(fullDate);
+    const dateObj = new Date(Date.UTC(year, month - 1, d, 12, 0, 0));
+    const dayName = dayNames[dateObj.getUTCDay()];
+    const dayRecs = recordsByDate.get(fullDate) || [];
+    const primaryRec = dayRecs[0];
 
     dailyData.push({
       date: fullDate,
       dayName: `${dayName}, ${d}`,
-      omsetKotor: rec ? rec.totalOmset : 0,
-      pengeluaran: rec ? rec.totalPengeluaran : 0,
-      qris: rec ? rec.qris : 0,
-      omsetBersih: rec ? rec.omsetAkhir : 0,
-      hasRekap: !!rec,
-      rekapId: rec?.id,
-      status: (rec?.status === 'draft' ? 'draft' : 'saved') as 'draft' | 'saved' | undefined,
+      omsetKotor: dayRecs.reduce((s, r) => s + (r.totalOmset || 0), 0),
+      pengeluaran: dayRecs.reduce((s, r) => s + (r.totalPengeluaran || 0), 0),
+      qris: dayRecs.reduce((s, r) => s + (r.qris || 0), 0),
+      omsetBersih: dayRecs.reduce((s, r) => s + (r.omsetAkhir || 0), 0),
+      habisGula: Math.round(dayRecs.reduce((s, r) => s + (r.gulaDetail?.habisGula || 0), 0) * 100) / 100,
+      gulaAmbil: Math.round(dayRecs.reduce((s, r) => s + (r.gulaDetail?.gulaAmbil || 0), 0) * 100) / 100,
+      sisaGula: Math.round(dayRecs.reduce((s, r) => s + (r.gulaDetail?.sisaGula || 0), 0) * 100) / 100,
+      gulaCair: Math.round(dayRecs.reduce((s, r) => s + (r.gulaDetail?.gulaCair || 0), 0) * 100) / 100,
+      hasRekap: dayRecs.length > 0,
+      rekapId: primaryRec?.id,
+      branch: primaryRec?.branch,
+      status: primaryRec?.status,
     });
   }
 
@@ -219,6 +231,7 @@ export function computeLocalMonthlyReport(branch?: Branch | 'All', monthStr?: st
     totalOmsetBersih,
     totalPengeluaran,
     totalQris,
+    totalGulaHabis: Math.round(totalGulaHabis * 100) / 100,
     daysCount: records.length,
     dailyData,
   };

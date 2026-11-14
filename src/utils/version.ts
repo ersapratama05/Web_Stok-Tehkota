@@ -1,6 +1,6 @@
-export const APP_VERSION = '1.3.0';
-export const APP_RELEASE_DATE = '11 November 2026';
-export const APP_BUILD_NAME = 'Database Terpusat & Sinkronisasi Multi-Perangkat';
+export const APP_VERSION = '1.4.0';
+export const APP_RELEASE_DATE = '14 November 2026';
+export const APP_BUILD_NAME = 'Database Cloud Terpusat, Pengiriman Barang Antarcabang & Dashboard Owner v1.4.0';
 
 export interface ReleaseNote {
   version: string;
@@ -10,6 +10,18 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_HISTORY: ReleaseNote[] = [
+  {
+    version: '1.4.0',
+    date: '14 Nov 2026',
+    title: 'Penyempurnaan Total Operasional & Pengiriman Antarcabang',
+    features: [
+      'Dukungan database cloud PostgreSQL (Supabase / Neon) dengan migrasi otomatis aman & sistem backup/restore JSON.',
+      'Menu baru Catatan Pengiriman Barang Antarcabang (Sompok ↔ Suyudono) dengan konfirmasi penerimaan, deteksi selisih, integrasi stok IN/OUT otomatis, dan export PDF.',
+      'Dashboard Owner Terpadu lintas cabang (Hari Ini, Kemarin, 7 Hari, 30 Hari, Bulanan, Rentang Kustom), ringkasan stok, gula, pengiriman pending, & log aktivitas.',
+      'Autentikasi token bertanda tangan server & RBAC ketat di API, manajemen akun oleh Owner, serta proteksi konflik edit bersamaan (Optimistic Concurrency Control).',
+      'Perbaikan zona waktu Asia/Jakarta (WIB), Gula Kemarin otomatis dari Sisa Gula hari sebelumnya, serta logo resmi Teh Kota pada hasil download PDF & JPG A4 2 kolom.',
+    ],
+  },
   {
     version: '1.3.0',
     date: '11 Nov 2026',
@@ -28,7 +40,6 @@ export const RELEASE_HISTORY: ReleaseNote[] = [
     title: 'Rekapan Gula Otomatis & Format Cetak Kertas Manual',
     features: [
       'Fitur perhitungan Gula Pasir otomatis dengan rumus: (Ambil + Gula Kemarin) - Sisa - Cair = Habis Gula.',
-      'Auto-populate Gula Kemarin mengambil nilai Gula Habis hari sebelumnya.',
       'Desain cetak PDF & JPG 2 kolom menyerupai kertas rekapitulasi manual outlet Teh Kota.',
       'Sistem Auto-Update PWA & Manajemen Pembaruan Aplikasi di akun Owner.',
     ],

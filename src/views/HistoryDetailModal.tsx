@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { RekapRecord } from '../types';
-import { formatDateIndo, formatNumberId, formatRupiah } from '../utils/calculations';
+import { apiFetch } from '../utils/api';
+import { formatDateIndo, formatRupiah } from '../utils/calculations';
 import {
   exportRecordToCsv,
   exportRecordToImage,
@@ -14,12 +15,8 @@ import {
   FileSpreadsheet,
   Edit3,
   Trash2,
-  Calendar,
-  Store,
-  User,
   Coffee,
   Receipt,
-  Download,
   AlertTriangle,
   Scale,
   History,
@@ -42,6 +39,7 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
   const { user } = useAuth();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showAuditLogs, setShowAuditLogs] = useState(false);
 
@@ -52,13 +50,25 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
     setIsDeleting(true);
     setDeleteError(null);
     try {
-      const res = await fetch(`/api/records/${record.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Gagal menghapus rekapan dari server');
+      const res = await apiFetch(`/api/records/${record.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(d?.error || 'Gagal menghapus rekapan dari server');
+      }
       onDeleteSuccess();
       onClose();
     } catch (err: any) {
       setDeleteError(err.message || 'Gagal menghapus');
       setIsDeleting(false);
+    }
+  };
+
+  const handleExport = async (fn: () => Promise<void> | void) => {
+    setIsExporting(true);
+    try {
+      await fn();
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -150,32 +160,36 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
               Unduh:
             </span>
             <button
-              onClick={() => exportRecordToPdf(record)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs"
-              title="Unduh format PDF"
+              disabled={isExporting}
+              onClick={() => handleExport(() => exportRecordToPdf(record))}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs disabled:opacity-50"
+              title="Unduh format PDF A4"
             >
               <FileText className="w-3.5 h-3.5 text-rose-600" />
               <span>PDF</span>
             </button>
             <button
-              onClick={() => exportRecordToImage(record, 'jpeg')}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs"
+              disabled={isExporting}
+              onClick={() => handleExport(() => exportRecordToImage(record, 'jpeg'))}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs disabled:opacity-50"
               title="Unduh format JPG"
             >
               <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
               <span>JPG</span>
             </button>
             <button
-              onClick={() => exportRecordToImage(record, 'png')}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs"
+              disabled={isExporting}
+              onClick={() => handleExport(() => exportRecordToImage(record, 'png'))}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs disabled:opacity-50"
               title="Unduh format PNG"
             >
               <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
               <span>PNG</span>
             </button>
             <button
-              onClick={() => exportRecordToCsv(record)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs"
+              disabled={isExporting}
+              onClick={() => handleExport(() => exportRecordToCsv(record))}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold shadow-xs disabled:opacity-50"
               title="Unduh format CSV (Excel)"
             >
               <FileSpreadsheet className="w-3.5 h-3.5 text-teal-600" />
@@ -289,35 +303,35 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
                 <div className="flex items-center gap-2">
                   <Scale className="w-4 h-4 text-emerald-800" />
                   <h4 className="text-xs font-bold text-emerald-950 uppercase tracking-wider">
-                    Rekap Kebutuhan & Perhitungan Gula Pasir
+                    Rekap Kebutuhan & Perhitungan Gula Pasir (KG)
                   </h4>
                 </div>
                 <span className="text-xs font-bold text-emerald-900 bg-white px-2.5 py-1 rounded-lg border border-emerald-200">
-                  Habis Gula: <strong className="font-mono text-emerald-800">{record.gulaDetail.habisGula}</strong>
+                  Habis Gula: <strong className="font-mono text-emerald-800">{record.gulaDetail.habisGula} KG</strong>
                 </span>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                 <div className="bg-white p-2.5 rounded-lg border border-emerald-100">
                   <span className="text-[10px] text-slate-500 uppercase block">Gula Ambil</span>
-                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.gulaAmbil}</span>
+                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.gulaAmbil} KG</span>
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-emerald-100">
                   <span className="text-[10px] text-slate-500 uppercase block">Gula Kemarin</span>
-                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.gulaKemarin}</span>
+                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.gulaKemarin} KG</span>
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-emerald-100">
                   <span className="text-[10px] text-slate-500 uppercase block">Sisa Gula</span>
-                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.sisaGula}</span>
+                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.sisaGula} KG</span>
                 </div>
                 <div className="bg-white p-2.5 rounded-lg border border-emerald-100">
                   <span className="text-[10px] text-slate-500 uppercase block">Gula Cair</span>
-                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.gulaCair}</span>
+                  <span className="font-mono font-bold text-slate-800">{record.gulaDetail.gulaCair} KG</span>
                 </div>
               </div>
 
               <p className="text-[11px] text-emerald-900 font-mono">
-                Rumus: ({record.gulaDetail.gulaAmbil} + {record.gulaDetail.gulaKemarin}) - {record.gulaDetail.sisaGula} - {record.gulaDetail.gulaCair} = <strong>{record.gulaDetail.habisGula}</strong>
+                Rumus: ({record.gulaDetail.gulaAmbil} + {record.gulaDetail.gulaKemarin}) - {record.gulaDetail.sisaGula} - {record.gulaDetail.gulaCair} = <strong>{record.gulaDetail.habisGula} KG</strong>
               </p>
             </div>
           )}

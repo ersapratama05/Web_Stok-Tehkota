@@ -1,8 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Branch, User, RekapRecord } from '../types';
-import { clearSyncQueue, getSyncQueue, saveRecordToLocal, setCachedRecords, getCachedRecords } from '../utils/storage';
+import { Branch, User } from '../types';
+import { clearSyncQueue, getSyncQueue, saveRecordToLocal, setCachedRecords } from '../utils/storage';
+import { apiFetch } from '../utils/api';
+import { getJakartaTimeStr } from '../utils/calculations';
 
 export type CentralSyncStatus = 'connected' | 'saving' | 'saved' | 'offline' | 'error';
+
+export interface StorageHealthInfo {
+  mode: 'postgresql' | 'file' | string;
+  isVercel?: boolean;
+  hasDatabaseUrl?: boolean;
+  persistentCloud: boolean;
+  ephemeralWarning?: boolean;
+  initError?: string | null;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -19,6 +30,7 @@ interface AuthContextType {
   setLastSavedTime: (time: string) => void;
   syncNotice: string | null;
   setSyncNotice: (notice: string | null) => void;
+  storageHealth: StorageHealthInfo | null;
   triggerSync: () => Promise<number>;
   refreshCentralData: () => Promise<void>;
 }
@@ -52,27 +64,129 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [syncStatus, setSyncStatus] = useState<CentralSyncStatus>('connected');
-  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(() => `${getJakartaTimeStr()} WIB`);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
-  const lastSyncTimestampRef = useRef<string>(new Date().toISOString());
+  const [storageHealth, setStorageHealth] = useState<StorageHealthInfo | null>(null);
+  const lastSyncTimestampRef = useRef<string | null>(null);
 
-  // SSE EventSource & Polling setup
+  // Check backend storage health on boot
   useEffect(() => {
+    if (!isOnline) return;
+    apiFetch('/api/health')
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data?.storage) {
+            setStorageHealth(data.storage);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [isOnline]);
+
+  // Validate session on boot if token exists
+  useEffect(() => {
+    if (!token || !isOnline) return;
+    apiFetch('/api/auth/me')
+      .then(async (res) => {
+        if (res.status === 401) {
+          logout();
+        } else if (res.ok) {
+          const json = await res.json().catch(() => null);
+          if (json?.user) {
+            setUser(json.user);
+            localStorage.setItem(USER_KEY, JSON.stringify(json.user));
+          }
+        }
+      })
+      .catch(() => {});
+  }, [token]);
+
+  // SSE EventSource & Fast Polling setup
+  useEffect(() => {
+    if (!user || !token) return;
+
     let eventSource: EventSource | null = null;
     let pollTimer: NodeJS.Timeout | null = null;
     let reconnectTimer: NodeJS.Timeout | null = null;
+    let disposed = false;
+
+    const pollUpdates = async (forceFull = false) => {
+      if (!isOnline || !token || disposed) return;
+      try {
+        // Owner always monitors All branches so Sompok & Suyudono updates arrive in real time
+        const pollBranch = user.role === 'admin' ? 'All' : user.branch;
+        const sinceParam = !forceFull && lastSyncTimestampRef.current
+          ? `&since=${encodeURIComponent(lastSyncTimestampRef.current)}`
+          : '';
+        const res = await apiFetch(`/api/sync/poll?branch=${encodeURIComponent(pollBranch)}${sinceParam}`);
+        if (res.status === 401) {
+          logout();
+          return;
+        }
+        if (res.ok) {
+          const json = await res.json();
+          const wasInitialized = Boolean(lastSyncTimestampRef.current);
+          if (json.serverTime) {
+            lastSyncTimestampRef.current = json.serverTime;
+          }
+
+          if (json.hasDeletions) {
+            await refreshCentralData();
+          } else if (Array.isArray(json.records) && json.records.length > 0) {
+            if (!wasInitialized) {
+              setCachedRecords(json.records);
+            } else {
+              for (const rec of json.records) {
+                saveRecordToLocal(rec);
+              }
+              const latest = json.records[0];
+              const editor = latest?.lastEditedBy || latest?.createdBy || 'Perangkat lain';
+              setSyncNotice(
+                `Data terbaru Cabang ${latest.branch} (${latest.date}) diperbarui oleh ${editor}.`
+              );
+              setTimeout(() => setSyncNotice(null), 5000);
+            }
+            setSyncStatus('saved');
+            setLastSavedTime(`${getJakartaTimeStr()} WIB`);
+            window.dispatchEvent(
+              new CustomEvent('tehkota:sync-record', { detail: { event: 'poll_update', records: json.records } })
+            );
+          } else {
+            setLastSavedTime(`${getJakartaTimeStr()} WIB`);
+          }
+
+          if (Array.isArray(json.transfers) && json.transfers.length > 0) {
+            if (wasInitialized) {
+              setSyncStatus('saved');
+              setLastSavedTime(`${getJakartaTimeStr()} WIB`);
+            }
+            window.dispatchEvent(
+              new CustomEvent('tehkota:sync-transfer', { detail: { event: 'poll_update', transfers: json.transfers } })
+            );
+          }
+        }
+      } catch {
+        // Keep silent retry on transient poll error
+      }
+    };
 
     const setupSSE = () => {
-      if (!isOnline) {
+      if (!isOnline || disposed) {
         setSyncStatus('offline');
         return;
       }
 
       try {
-        eventSource = new EventSource(`/api/sync/stream?branch=${activeBranch}`);
+        const sseBranch = user.role === 'admin' ? 'All' : user.branch;
+        const sseUrl = `/api/sync/stream?branch=${encodeURIComponent(
+          sseBranch
+        )}&token=${encodeURIComponent(token)}`;
+        eventSource = new EventSource(sseUrl);
 
         eventSource.onopen = () => {
           setSyncStatus('connected');
+          pollUpdates(false);
         };
 
         eventSource.onmessage = (event) => {
@@ -86,12 +200,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setSyncNotice(`${editor} baru saja ${actionText} rekapan Cabang ${data.branch} (${data.date}).`);
                 setTimeout(() => setSyncNotice(null), 5000);
               }
+              if (data.timestamp) lastSyncTimestampRef.current = data.timestamp;
               setSyncStatus('saved');
-              setLastSavedTime(new Date().toLocaleTimeString('id-ID'));
+              setLastSavedTime(`${getJakartaTimeStr()} WIB`);
+              window.dispatchEvent(new CustomEvent('tehkota:sync-record', { detail: data }));
+            } else if (
+              data.event === 'transfer_created' ||
+              data.event === 'transfer_confirmed' ||
+              data.event === 'transfer_cancelled'
+            ) {
+              const tr = data.transfer;
+              if (tr) {
+                const msgMap: Record<string, string> = {
+                  transfer_created: `Pengiriman baru ${tr.transferNumber} dari Cabang ${tr.senderBranch} ke ${tr.receiverBranch}.`,
+                  transfer_confirmed: `Pengiriman ${tr.transferNumber} telah dikonfirmasi (${tr.status}) oleh ${tr.receiverName || tr.receiverBranch}.`,
+                  transfer_cancelled: `Pengiriman ${tr.transferNumber} dibatalkan.`,
+                };
+                setSyncNotice(msgMap[data.event] || 'Data pengiriman barang diperbarui.');
+                setTimeout(() => setSyncNotice(null), 6000);
+              }
+              if (data.timestamp) lastSyncTimestampRef.current = data.timestamp;
+              setSyncStatus('saved');
+              setLastSavedTime(`${getJakartaTimeStr()} WIB`);
+              window.dispatchEvent(new CustomEvent('tehkota:sync-transfer', { detail: data }));
               window.dispatchEvent(new CustomEvent('tehkota:sync-record', { detail: data }));
             } else if (data.event === 'record_deleted' || data.event === 'batch_sync') {
+              if (data.timestamp) lastSyncTimestampRef.current = data.timestamp;
               setSyncStatus('saved');
-              window.dispatchEvent(new CustomEvent('tehkota:sync-record', { detail: data }));
+              setLastSavedTime(`${getJakartaTimeStr()} WIB`);
+              refreshCentralData();
             }
           } catch {}
         };
@@ -99,50 +236,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         eventSource.onerror = () => {
           eventSource?.close();
           eventSource = null;
-          // Retry after 5s
-          reconnectTimer = setTimeout(setupSSE, 5000);
+          if (!disposed) {
+            reconnectTimer = setTimeout(setupSSE, 6000);
+          }
         };
       } catch {
-        // Fallback to polling
+        // Fallback purely to 5s polling (e.g. serverless Vercel)
       }
     };
 
-    // Periodic poll as redundant multi-device guarantee
-    const pollUpdates = async () => {
-      if (!isOnline) return;
-      try {
-        const res = await fetch(`/api/sync/poll?branch=${activeBranch}&since=${encodeURIComponent(lastSyncTimestampRef.current)}`);
-        if (res.ok) {
-          const json = await res.json();
-          if (json.serverTime) {
-            lastSyncTimestampRef.current = json.serverTime;
-          }
-          if (Array.isArray(json.records) && json.records.length > 0) {
-            for (const rec of json.records) {
-              saveRecordToLocal(rec);
-            }
-            window.dispatchEvent(new CustomEvent('tehkota:sync-record', { detail: { event: 'poll_update', records: json.records } }));
-          }
-        }
-      } catch {}
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        pollUpdates(false);
+      }
     };
 
+    // Initial full sync immediately + 5-second reliable polling across devices
+    pollUpdates(true);
     setupSSE();
-    pollTimer = setInterval(pollUpdates, 10000);
+    pollTimer = setInterval(() => pollUpdates(false), 5000);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
     return () => {
+      disposed = true;
       if (eventSource) eventSource.close();
       if (pollTimer) clearInterval(pollTimer);
       if (reconnectTimer) clearTimeout(reconnectTimer);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
     };
-  }, [activeBranch, isOnline]);
+  }, [isOnline, user?.id, user?.role, user?.branch, token]);
 
-  // Monitor online status
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
       setSyncStatus('connected');
       triggerSync();
+      refreshCentralData();
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -159,6 +290,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const setActiveBranch = (b: Branch) => {
+    if (user && user.role !== 'admin' && user.branch !== 'All' && user.branch !== b) {
+      return;
+    }
     setActiveBranchState(b);
     localStorage.setItem(BRANCH_KEY, b);
   };
@@ -176,13 +310,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: (data && data.error) || 'Username atau kata sandi salah' };
       }
 
+      setCachedRecords([]);
+      lastSyncTimestampRef.current = null;
       setToken(data.token);
       setUser(data.user);
       localStorage.setItem(TOKEN_KEY, data.token);
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
 
-      const assignedBranch = (data.user.branch !== 'All' ? data.user.branch : (branch || 'Sompok')) as Branch;
-      setActiveBranch(assignedBranch);
+      const assignedBranch = (data.user.branch !== 'All' ? data.user.branch : branch || 'Sompok') as Branch;
+      setActiveBranchState(assignedBranch);
+      localStorage.setItem(BRANCH_KEY, assignedBranch);
+      setLastSavedTime(`${getJakartaTimeStr()} WIB`);
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Gagal terhubung ke server API' };
@@ -202,11 +340,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, error: (data && data.error) || `Gagal masuk ke Cabang ${branch}` };
       }
 
+      setCachedRecords([]);
+      lastSyncTimestampRef.current = null;
       setToken(data.token);
       setUser(data.user);
       localStorage.setItem(TOKEN_KEY, data.token);
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-      setActiveBranch(branch);
+      setActiveBranchState(branch);
+      localStorage.setItem(BRANCH_KEY, branch);
+      setLastSavedTime(`${getJakartaTimeStr()} WIB`);
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Gagal terhubung ke server API' };
@@ -216,8 +358,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setToken(null);
     setUser(null);
+    lastSyncTimestampRef.current = null;
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    setCachedRecords([]);
   };
 
   const triggerSync = async (): Promise<number> => {
@@ -226,7 +370,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       setSyncStatus('saving');
-      const res = await fetch('/api/sync', {
+      const res = await apiFetch('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ queue }),
@@ -235,8 +379,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.ok) {
         const data = await res.json();
         clearSyncQueue();
+        if (Array.isArray(data.records)) {
+          for (const rec of data.records) {
+            saveRecordToLocal(rec);
+          }
+        }
         setSyncStatus('saved');
-        setLastSavedTime(new Date().toLocaleTimeString('id-ID'));
+        setLastSavedTime(`${getJakartaTimeStr()} WIB`);
+        window.dispatchEvent(new CustomEvent('tehkota:sync-record', { detail: { event: 'batch_sync' } }));
         return data.synced || 0;
       } else {
         setSyncStatus('error');
@@ -251,15 +401,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshCentralData = async (): Promise<void> => {
     try {
       setSyncStatus('saving');
-      const res = await fetch(`/api/records?branch=${activeBranch}`);
+      const branchQuery = user?.role === 'admin' ? 'All' : user?.branch || activeBranch;
+      const res = await apiFetch(`/api/records?branch=${encodeURIComponent(branchQuery)}`);
       if (res.ok) {
         const json = await res.json();
         if (Array.isArray(json.records)) {
           setCachedRecords(json.records);
           setSyncStatus('saved');
-          setLastSavedTime(new Date().toLocaleTimeString('id-ID'));
-          window.dispatchEvent(new CustomEvent('tehkota:sync-record', { detail: { event: 'manual_refresh', records: json.records } }));
+          setLastSavedTime(`${getJakartaTimeStr()} WIB`);
+          window.dispatchEvent(
+            new CustomEvent('tehkota:sync-record', { detail: { event: 'manual_refresh', records: json.records } })
+          );
+          window.dispatchEvent(new CustomEvent('tehkota:sync-transfer', { detail: { event: 'manual_refresh' } }));
         }
+      } else {
+        setSyncStatus('error');
       }
     } catch {
       setSyncStatus('error');
@@ -283,6 +439,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLastSavedTime,
         syncNotice,
         setSyncNotice,
+        storageHealth,
         triggerSync,
         refreshCentralData,
       }}

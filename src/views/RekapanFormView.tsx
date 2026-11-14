@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Branch, CupDetail, ExpenseItem, RekapRecord, StockItemRow, ItemCategory } from '../types';
+import { Branch, CupDetail, ExpenseItem, RekapRecord, StockItemRow } from '../types';
+import { apiFetch } from '../utils/api';
 import {
-  calculateCupSO,
   calculateHabisGula,
   calculateOmsetAkhir,
   calculateStokAkhir,
@@ -10,11 +10,13 @@ import {
   formatDateIndo,
   formatNumberId,
   formatRupiah,
+  getJakartaTimeStr,
   getTodayDateStr,
   getYesterdayDateStr,
   parseRupiahInput,
+  validateGulaDetail,
 } from '../utils/calculations';
-import { CATEGORIES_ORDER, createInitialStockRows, TEH_KOTA_ITEMS } from '../utils/itemsList';
+import { createInitialStockRows } from '../utils/itemsList';
 import { addToSyncQueue, getLocalDraft, saveLocalDraft, removeLocalDraft, saveRecordToLocal, getCachedRecords } from '../utils/storage';
 import { CupModal } from '../components/CupModal';
 import {
@@ -67,9 +69,22 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   // UI helpers
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeCategory, setActiveCategory] = useState<string>('Semua');
+  const [sectionFilter, setSectionFilter] = useState<'all' | 'stok' | 'pengeluaran' | 'gula' | 'keuangan'>('all');
   const [isCupModalOpen, setIsCupModalOpen] = useState<boolean>(false);
   const [isLoadingRecord, setIsLoadingRecord] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [loadedUpdatedAt, setLoadedUpdatedAt] = useState<string | null>(null);
+  const [hasServerRecord, setHasServerRecord] = useState<boolean>(false);
+  const [hasPreviousGula, setHasPreviousGula] = useState<boolean>(false);
+  const [previousGulaDate, setPreviousGulaDate] = useState<string | undefined>(undefined);
+  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
+  const [conflictModal, setConflictModal] = useState<{
+    conflictType: 'duplicate_date' | 'concurrent_edit';
+    message: string;
+    serverRecord: RekapRecord;
+    pendingStatus: 'draft' | 'saved';
+  } | null>(null);
   const [revisionInfo, setRevisionInfo] = useState<{
     revisionCount?: number;
     lastEditedBy?: string;
@@ -85,22 +100,34 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   const totalPengeluaran = calculateTotalPengeluaran(expenses);
   const omsetAkhir = calculateOmsetAkhir(totalOmset, totalPengeluaran, qris);
   const habisGula = calculateHabisGula(gulaAmbil, gulaKemarin, sisaGula, gulaCair);
+  const gulaValidation = validateGulaDetail({
+    gulaAmbil,
+    gulaKemarin,
+    sisaGula,
+    gulaCair,
+    habisGula,
+  });
 
   // Load record or previous day carryover when branch or date changes
   const loadDataForBranchAndDate = useCallback(
     async (targetBranch: Branch, targetDate: string) => {
       setIsLoadingRecord(true);
       setSaveMessage(null);
+      setConflictModal(null);
 
       try {
         // 1. Primary Source of Truth: Central Server Database
-        const res = await fetch(`/api/records?branch=${targetBranch}&date=${targetDate}`);
+        const res = await apiFetch(`/api/records?branch=${targetBranch}&date=${targetDate}`);
         if (res.ok) {
           const data = await res.json();
           if (data.records && data.records.length > 0) {
             const existing: RekapRecord = data.records[0];
             setRecordId(existing.id);
             setRecordStatus(existing.status);
+            setHasServerRecord(true);
+            setLoadedUpdatedAt(existing.updatedAt || null);
+            setHasPreviousGula(false);
+            setPreviousGulaDate(undefined);
             setStocks(existing.stocks);
             setExpenses(existing.expenses || []);
             setTotalOmset(existing.totalOmset || 0);
@@ -123,7 +150,6 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
               setSisaGula(0);
               setGulaCair(0);
             }
-            // Clear local draft since server has definitive record
             removeLocalDraft(targetBranch, targetDate);
             saveRecordToLocal(existing);
             setSaveMessage({
@@ -136,6 +162,8 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         }
 
         // 2. If no record on server, check local draft
+        setHasServerRecord(false);
+        setLoadedUpdatedAt(null);
         const localDraft = getLocalDraft(targetBranch, targetDate);
         if (localDraft) {
           setRecordId(localDraft.id || null);
@@ -151,19 +179,23 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             setSisaGula(localDraft.gulaDetail.sisaGula || 0);
             setGulaCair(localDraft.gulaDetail.gulaCair || 0);
           }
+          setHasPreviousGula(false);
+          setPreviousGulaDate(undefined);
           setRevisionInfo(null);
           setSaveMessage({
-            text: `Melanjutkan draf lokal yang tersimpan untuk tanggal ${formatDateIndo(targetDate)}`,
+            text: `Melanjutkan draf lokal sementara untuk tanggal ${formatDateIndo(targetDate)}`,
             type: 'info',
           });
           setIsLoadingRecord(false);
           return;
         }
 
-        // 3. New record: Fetch previous day ST to auto-populate SA (Carryover Rule)
-        const prevRes = await fetch(`/api/records/previous-stock?branch=${targetBranch}&date=${targetDate}`);
+        // 3. New record: Fetch previous day ST to auto-populate SA & Gula Kemarin (sisaGula hari sebelumnya)
+        const prevRes = await apiFetch(`/api/records/previous-stock?branch=${targetBranch}&date=${targetDate}`);
         let prevStocksMap: Record<string, number> | undefined;
         let autoGulaKemarin = 0;
+        let foundPrevGula = false;
+        let prevDateLabel: string | undefined;
         if (prevRes.ok) {
           const prevData = await prevRes.json();
           if (prevData.stocks) {
@@ -172,10 +204,12 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           if (prevData.gulaKemarin !== undefined) {
             autoGulaKemarin = prevData.gulaKemarin;
           }
+          foundPrevGula = Boolean(prevData.hasPreviousGula);
+          prevDateLabel = prevData.previousDate;
         }
 
-        // Offline / cached fallback for carryover SA & Gula Kemarin
-        if (!prevStocksMap || autoGulaKemarin === 0) {
+        // Offline / cached fallback for carryover SA & Gula Kemarin (sisaGula hari sebelumnya pada cabang sama)
+        if (!prevStocksMap || (!foundPrevGula && autoGulaKemarin === 0)) {
           const cachedPrior = getCachedRecords()
             .filter((r) => r.branch === targetBranch && r.date < targetDate)
             .sort((a, b) => b.date.localeCompare(a.date))[0];
@@ -186,13 +220,14 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 prevStocksMap[item.name] = item.st;
               }
             }
-            if (autoGulaKemarin === 0 && cachedPrior.gulaDetail) {
-              autoGulaKemarin = cachedPrior.gulaDetail.habisGula || 0;
+            if (!foundPrevGula && cachedPrior.gulaDetail) {
+              autoGulaKemarin = cachedPrior.gulaDetail.sisaGula || 0;
+              foundPrevGula = true;
+              prevDateLabel = cachedPrior.date;
             }
           }
         }
 
-        // Generate fresh rows with carried-over SA
         const freshStocks = createInitialStockRows(prevStocksMap);
         setStocks(freshStocks);
         setRecordId(null);
@@ -202,15 +237,20 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         setQris(0);
         setGulaAmbil(0);
         setGulaKemarin(autoGulaKemarin);
+        setHasPreviousGula(foundPrevGula);
+        setPreviousGulaDate(prevDateLabel);
         setSisaGula(0);
         setGulaCair(0);
         setNotes('');
+        setRevisionInfo(null);
       } catch (err) {
         console.warn('Error loading record, falling back to local defaults', err);
         const freshStocks = createInitialStockRows();
         setStocks(freshStocks);
         setGulaAmbil(0);
         setGulaKemarin(0);
+        setHasPreviousGula(false);
+        setPreviousGulaDate(undefined);
         setSisaGula(0);
         setGulaCair(0);
       } finally {
@@ -321,15 +361,13 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     setExpenses((prev) => prev.filter((exp) => exp.id !== id));
   };
 
-  // Reset current form for revision
-  const handleResetCurrentForm = async () => {
-    const confirmMsg = `Yakin ingin mereset/mengosongkan isian rekapan Cabang ${activeBranch} tanggal ${formatDateIndo(date)} untuk direvisi? Jika rekapan sudah pernah disimpan, data lama akan dihapus agar dapat diisi ulang dari awal.`;
-    if (!window.confirm(confirmMsg)) return;
-
+  // Reset current form for revision (confirmed via in-app modal)
+  const executeResetCurrentForm = async () => {
+    setShowResetConfirm(false);
     try {
       if (recordId) {
         try {
-          await fetch(`/api/records/${recordId}`, { method: 'DELETE' });
+          await apiFetch(`/api/records/${recordId}`, { method: 'DELETE' });
         } catch {
           // ignore offline
         }
@@ -337,15 +375,16 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
 
       removeLocalDraft(activeBranch, date);
 
-      // Fetch previous stock for carryover SA
       let prevStocksMap: Record<string, number> | undefined;
+      let autoGulaKemarin = 0;
+      let foundPrevGula = false;
       try {
-        const prevRes = await fetch(`/api/records/previous-stock?branch=${activeBranch}&date=${date}`);
+        const prevRes = await apiFetch(`/api/records/previous-stock?branch=${activeBranch}&date=${date}`);
         if (prevRes.ok) {
           const prevData = await prevRes.json();
-          if (prevData.stocks) {
-            prevStocksMap = prevData.stocks;
-          }
+          if (prevData.stocks) prevStocksMap = prevData.stocks;
+          if (prevData.gulaKemarin !== undefined) autoGulaKemarin = prevData.gulaKemarin;
+          foundPrevGula = Boolean(prevData.hasPreviousGula);
         }
       } catch {
         // fallback
@@ -357,26 +396,43 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
       setTotalOmset(0);
       setQris(0);
       setGulaAmbil(0);
-      setGulaKemarin(0);
+      setGulaKemarin(autoGulaKemarin);
+      setHasPreviousGula(foundPrevGula);
       setSisaGula(0);
       setGulaCair(0);
       setNotes('');
       setRecordId(null);
+      setHasServerRecord(false);
+      setLoadedUpdatedAt(null);
       setRecordStatus('draft');
+      setRevisionInfo(null);
       setSaveMessage({
-        text: `Rekapan tanggal ${formatDateIndo(date)} berhasil di-reset dan siap direvisi.`,
+        text: `Rekapan tanggal ${formatDateIndo(date)} berhasil di-reset dan siap diisi ulang.`,
         type: 'success',
       });
     } catch (err: any) {
-      alert('Gagal mereset rekapan: ' + (err.message || 'Terjadi kesalahan'));
+      setSaveMessage({
+        text: 'Gagal mereset rekapan: ' + (err.message || 'Terjadi kesalahan'),
+        type: 'error',
+      });
     }
   };
 
-  // Save Record (Save as Draft or Save Final)
-  const handleSaveRecord = async (statusToSave: 'draft' | 'saved' = 'saved') => {
+  // Save Record (Save as Draft or Save Final with Gula validation & conflict guard)
+  const handleSaveRecord = async (statusToSave: 'draft' | 'saved' = 'saved', forceOverwrite = false) => {
+    if (!gulaValidation.valid) {
+      setSaveMessage({
+        text: gulaValidation.error || 'Angka perhitungan gula tidak valid.',
+        type: 'error',
+      });
+      setSectionFilter('gula');
+      return;
+    }
+
+    setIsSaving(true);
     setSyncStatus('saving');
     const now = new Date();
-    const timeStr = now.toLocaleTimeString('id-ID', { hour12: false });
+    const timeStr = getJakartaTimeStr(now);
     const editorName = user?.name || (user?.role === 'admin' ? 'Owner Teh Kota' : `Kasir ${activeBranch}`);
 
     const payload: any = {
@@ -404,36 +460,56 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         habisGula,
       },
       notes,
+      mode: hasServerRecord ? 'update' : 'create',
+      expectedUpdatedAt: loadedUpdatedAt || undefined,
+      forceOverwrite,
     };
 
-    // Save locally first for instant offline safety
     saveLocalDraft(activeBranch, date, payload);
-    saveRecordToLocal(payload);
 
     if (!isOnline) {
+      saveRecordToLocal(payload);
       addToSyncQueue(payload);
       setSyncStatus('offline');
+      setLastSavedTime(`${timeStr} WIB`);
+      setIsSaving(false);
       setSaveMessage({
-        text: 'Tersimpan secara lokal (Mode Offline). Akan disinkronkan otomatis saat ada koneksi.',
+        text: 'Tersimpan di antrean offline sementara perangkat. Akan dikirim ke database pusat saat Online kembali.',
         type: 'info',
       });
       return;
     }
 
     try {
-      const res = await fetch('/api/records', {
+      const res = await apiFetch('/api/records', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       const contentType = res.headers.get('content-type') || '';
+      if (res.status === 409 && contentType.includes('application/json')) {
+        const conflictData = await res.json();
+        setSyncStatus('error');
+        setConflictModal({
+          conflictType: conflictData.conflictType || 'concurrent_edit',
+          message: conflictData.error,
+          serverRecord: conflictData.serverRecord,
+          pendingStatus: statusToSave,
+        });
+        setIsSaving(false);
+        return;
+      }
+
       if (res.ok && contentType.includes('application/json')) {
         const resData = await res.json();
         setRecordId(resData.record.id);
         setRecordStatus(statusToSave);
+        setHasServerRecord(true);
+        setLoadedUpdatedAt(resData.record.updatedAt || null);
+        setConflictModal(null);
         setSyncStatus('saved');
-        setLastSavedTime(timeStr);
+        setLastSavedTime(`${timeStr} WIB`);
         setRevisionInfo({
           revisionCount: resData.record.revisionCount,
           lastEditedBy: resData.record.lastEditedBy,
@@ -449,48 +525,42 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         setSaveMessage({
           text:
             statusToSave === 'draft'
-              ? 'Draf berhasil disimpan ke server pusat!'
-              : (recordId ? 'Perubahan rekapan berhasil disimpan ke database pusat!' : 'Rekapan berhasil disimpan ke database pusat!'),
+              ? 'Draf berhasil disimpan ke database pusat!'
+              : hasServerRecord
+              ? 'Perubahan rekapan berhasil disimpan ke database pusat!'
+              : 'Rekapan berhasil disimpan ke database pusat!',
           type: 'success',
         });
       } else {
         const errorData = await res.json().catch(() => null);
-        if (errorData && errorData.error) {
-          setSyncStatus('error');
-          setSaveMessage({ text: errorData.error, type: 'error' });
-          return;
-        }
-        setRecordId(payload.id);
-        setRecordStatus(statusToSave);
-        setSyncStatus('saved');
-        setLastSavedTime(timeStr);
+        setSyncStatus('error');
         setSaveMessage({
-          text: 'Rekapan tersimpan di perangkat lokal!',
-          type: 'success',
+          text: errorData?.error || 'Gagal tersimpan: Server menolak penyimpanan.',
+          type: 'error',
         });
+        setIsSaving(false);
+        return;
       }
 
       if (statusToSave === 'saved' && onSavedSuccess) {
         setTimeout(onSavedSuccess, 800);
       }
     } catch (err: any) {
-      console.warn('API sync warning, saved to local cache:', err);
+      console.warn('API sync warning, queued for offline retry:', err);
+      saveRecordToLocal(payload);
       addToSyncQueue(payload);
-      setRecordId(payload.id);
-      setRecordStatus(statusToSave);
-      setSyncStatus('saved');
-      setLastSavedTime(timeStr);
+      setSyncStatus('offline');
+      setLastSavedTime(`${timeStr} WIB`);
       setSaveMessage({
-        text: 'Rekapan berhasil disimpan secara lokal di browser!',
-        type: 'success',
+        text: 'Koneksi ke server terganggu. Rekapan masuk antrean sinkronisasi lokal sementara.',
+        type: 'info',
       });
-      if (statusToSave === 'saved' && onSavedSuccess) {
-        setTimeout(onSavedSuccess, 800);
-      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Autosave Draft Debounced (1.5 seconds)
+  // Autosave Local Recovery Draft Debounced (1.5 seconds - backup only, not central DB)
   useEffect(() => {
     if (isInitialLoadRef.current) {
       isInitialLoadRef.current = false;
@@ -502,7 +572,6 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     }
 
     autosaveTimerRef.current = setTimeout(() => {
-      // Auto save as draft silently
       const draftPayload: Partial<RekapRecord> = {
         id: recordId || undefined,
         branch: activeBranch,
@@ -524,7 +593,6 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         status: 'draft',
       };
       saveLocalDraft(activeBranch, date, draftPayload);
-      setLastSavedTime(new Date().toLocaleTimeString('id-ID'));
     }, 1500);
 
     return () => {
@@ -594,26 +662,40 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
 
             <button
               type="button"
-              onClick={handleResetCurrentForm}
+              onClick={() => loadDataForBranchAndDate(activeBranch, date)}
+              className="flex items-center gap-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition"
+              title="Batalkan perubahan lokal & muat ulang data terbaru dari server"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Muat Ulang</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowResetConfirm(true)}
               className="flex items-center gap-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition"
               title="Reset rekapan tanggal ini agar dapat direvisi / diisi ulang"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
+              <Trash2 className="w-3.5 h-3.5" />
               <span>Reset</span>
             </button>
             <button
+              type="button"
+              disabled={isSaving}
               onClick={() => handleSaveRecord('draft')}
-              className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition"
+              className="text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition disabled:opacity-50"
               title="Simpan sebagai draf sekarang"
             >
               Simpan Draf
             </button>
             <button
+              type="button"
+              disabled={isSaving || !gulaValidation.valid}
               onClick={() => handleSaveRecord('saved')}
-              className="flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-800 hover:bg-emerald-700 px-3.5 py-1.5 rounded-lg shadow-sm transition active:scale-95"
+              className="flex items-center gap-1.5 text-xs font-bold text-white bg-emerald-800 hover:bg-emerald-700 px-3.5 py-1.5 rounded-lg shadow-sm transition active:scale-95 disabled:opacity-50"
             >
               <Save className="w-3.5 h-3.5" />
-              <span>{recordId ? 'Simpan Perubahan' : 'Simpan Rekapan'}</span>
+              <span>{isSaving ? 'Menyimpan...' : hasServerRecord ? 'Simpan Perubahan' : 'Simpan Rekapan'}</span>
             </button>
           </div>
         </div>
@@ -717,9 +799,33 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             </button>
           </div>
         )}
+        {/* Quick Section Tabs (including dedicated Rekapan Gula focus) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pt-2 border-t border-slate-100 custom-scrollbar">
+          {[
+            { id: 'all', label: 'Semua Bagian' },
+            { id: 'stok', label: 'Tabel Stok' },
+            { id: 'pengeluaran', label: 'Pengeluaran' },
+            { id: 'gula', label: 'Rekapan Gula' },
+            { id: 'keuangan', label: 'Keuangan Akhir' },
+          ].map((sec) => (
+            <button
+              key={sec.id}
+              type="button"
+              onClick={() => setSectionFilter(sec.id as any)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition ${
+                sectionFilter === sec.id
+                  ? 'bg-emerald-800 text-white shadow-xs'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              {sec.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* SECTION 1: TABEL REKAP STOK */}
+      {(sectionFilter === 'all' || sectionFilter === 'stok') && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Table Toolbar: Category Tabs & Search */}
         <div className="p-4 border-b border-slate-100 space-y-3">
@@ -939,8 +1045,10 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           </table>
         </div>
       </div>
+      )}
 
       {/* SECTION 2: FORM PENGELUARAN */}
+      {(sectionFilter === 'all' || sectionFilter === 'pengeluaran') && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div>
@@ -1024,29 +1132,45 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           </span>
         </div>
       </div>
+      )}
 
       {/* SECTION 3: REKAP & PERHITUNGAN GULA PASIR */}
+      {(sectionFilter === 'all' || sectionFilter === 'gula') && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Scale className="w-4 h-4 text-emerald-700" />
-              <span>Rekap Kebutuhan & Perhitungan Gula Pasir</span>
+              <span>Rekapan Gula Pasir (KG)</span>
             </h3>
             <p className="text-xs text-slate-600">
-              Rumus Otomatis: <code className="text-emerald-800 font-bold">Habis Gula = (Ambil + Gula Kemarin) - Sisa Gula - Gula Cair</code>
+              Rumus Otomatis: <code className="text-emerald-800 font-bold">Gula Habis = Ambil + Gula Kemarin - Sisa - Cair</code>
             </p>
           </div>
           <div className="bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 text-xs font-bold text-emerald-900">
-            Total Habis Gula: <span className="font-mono text-sm text-emerald-800">{habisGula}</span>
+            Total Gula Habis: <span className="font-mono text-sm text-emerald-800">{habisGula} KG</span>
           </div>
         </div>
+
+        {/* Sugar Validation Error / Warning */}
+        {!gulaValidation.valid && gulaValidation.error && (
+          <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-xs text-rose-900 flex items-start gap-2 font-semibold">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <span>{gulaValidation.error}</span>
+          </div>
+        )}
+        {gulaValidation.valid && gulaValidation.warning && (
+          <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 flex items-start gap-2 font-semibold">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <span>{gulaValidation.warning}</span>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {/* Gula Ambil */}
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Gula Ambil (Baru)
+              1. Ambil (KG)
             </label>
             <div className="relative">
               <input
@@ -1056,19 +1180,31 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 value={gulaAmbil === 0 ? '' : gulaAmbil}
                 onChange={(e) => setGulaAmbil(Math.max(0, parseFloat(e.target.value) || 0))}
                 placeholder="0"
-                className="w-full px-3 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
+                className="w-full pl-3 pr-10 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
               />
+              <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-500">KG</span>
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
-              Gula yang baru diambil dari gudang
+              Gula pasir baru diambil hari ini
             </p>
           </div>
 
           {/* Gula Kemarin */}
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Gula Kemarin
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700">
+                2. Gula Kemarin (KG)
+              </label>
+              <span
+                className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                  hasPreviousGula
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {hasPreviousGula ? `Auto Sisa ${previousGulaDate || 'Kemarin'}` : 'Saldo Awal Manual'}
+              </span>
+            </div>
             <div className="relative">
               <input
                 type="number"
@@ -1077,18 +1213,19 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 value={gulaKemarin === 0 ? '' : gulaKemarin}
                 onChange={(e) => setGulaKemarin(Math.max(0, parseFloat(e.target.value) || 0))}
                 placeholder="0"
-                className="w-full px-3 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
+                className="w-full pl-3 pr-10 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
               />
+              <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-500">KG</span>
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
-              Stok gula bawaan dari hari kemarin
+              Otomatis dari Sisa Gula kemarin (bisa dikoreksi)
             </p>
           </div>
 
           {/* Sisa Gula */}
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Sisa Gula (Fisik)
+              3. Sisa Gula Fisik (KG)
             </label>
             <div className="relative">
               <input
@@ -1098,18 +1235,19 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 value={sisaGula === 0 ? '' : sisaGula}
                 onChange={(e) => setSisaGula(Math.max(0, parseFloat(e.target.value) || 0))}
                 placeholder="0"
-                className="w-full px-3 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
+                className="w-full pl-3 pr-10 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
               />
+              <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-500">KG</span>
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
-              Sisa gula fisik yang belum dicairkan
+              Diteruskan ke Gula Kemarin besok
             </p>
           </div>
 
           {/* Gula Cair */}
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Gula Cair
+              4. Gula Cair (KG)
             </label>
             <div className="relative">
               <input
@@ -1119,34 +1257,51 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 value={gulaCair === 0 ? '' : gulaCair}
                 onChange={(e) => setGulaCair(Math.max(0, parseFloat(e.target.value) || 0))}
                 placeholder="0"
-                className="w-full px-3 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
+                className="w-full pl-3 pr-10 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
               />
+              <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-500">KG</span>
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
-              Sisa gula cair siap pakai
+              Sisa gula cair siap pakai (KG)
             </p>
           </div>
         </div>
 
         {/* Calculation Result Breakdown Strip */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-emerald-50/80 rounded-xl border border-emerald-200">
+        <div
+          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border ${
+            gulaValidation.valid
+              ? 'bg-emerald-50/80 border-emerald-200'
+              : 'bg-rose-50 border-rose-300'
+          }`}
+        >
           <div className="text-xs text-emerald-950">
             <span className="font-bold">Rincian Perhitungan:</span>{' '}
             <span className="font-mono">
               ({gulaAmbil} + {gulaKemarin}) - {sisaGula} - {gulaCair} ={' '}
-              <strong className="text-emerald-900 font-bold">{habisGula}</strong>
+              <strong className={gulaValidation.valid ? 'text-emerald-900 font-bold' : 'text-rose-700 font-bold'}>
+                {habisGula} KG
+              </strong>
             </span>
           </div>
           <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-            <span>Habis Berapa:</span>
-            <span className="text-sm font-mono bg-white px-2.5 py-0.5 rounded-lg border border-emerald-300 text-emerald-800 shadow-2xs">
-              {habisGula}
+            <span>Gula Habis:</span>
+            <span
+              className={`text-sm font-mono bg-white px-2.5 py-0.5 rounded-lg border shadow-2xs ${
+                gulaValidation.valid
+                  ? 'border-emerald-300 text-emerald-800'
+                  : 'border-rose-400 text-rose-700'
+              }`}
+            >
+              {habisGula} KG
             </span>
           </div>
         </div>
       </div>
+      )}
 
       {/* SECTION 4: FORM KEUANGAN AKHIR */}
+      {(sectionFilter === 'all' || sectionFilter === 'keuangan') && (
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4">
         <div>
           <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -1245,8 +1400,9 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           />
         </div>
       </div>
+      )}
 
-      {/* Floating Bottom Sticky Action Bar (Always Available on Cashier Mobile & PC) */}
+      {/* Floating Bottom Sticky Action Bar */}
       <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 p-3 sm:px-6 shadow-xl">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -1259,25 +1415,53 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
               </span>
             </div>
             <div className="hidden sm:block text-xs text-slate-600 pl-3 border-l border-slate-200">
-              ST dihitung otomatis • Draf tersimpan otomatis
+              <div>
+                Gula Habis: <strong className="font-mono text-emerald-800">{habisGula} KG</strong> •{' '}
+                <span
+                  className={`font-bold ${
+                    syncStatus === 'saving'
+                      ? 'text-blue-700'
+                      : syncStatus === 'error'
+                      ? 'text-rose-700'
+                      : syncStatus === 'offline'
+                      ? 'text-amber-700'
+                      : 'text-emerald-700'
+                  }`}
+                >
+                  {syncStatus === 'saving'
+                    ? 'Sedang menyimpan...'
+                    : syncStatus === 'error'
+                    ? 'Gagal tersimpan'
+                    : syncStatus === 'offline'
+                    ? 'Offline'
+                    : syncStatus === 'saved'
+                    ? 'Berhasil tersimpan'
+                    : 'Online'}
+                </span>
+              </div>
+              {lastSavedTime && (
+                <div className="text-[10px] text-slate-500">Terakhir diperbarui: {lastSavedTime}</div>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <button
               type="button"
+              disabled={isSaving}
               onClick={() => handleSaveRecord('draft')}
-              className="px-3 sm:px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition"
+              className="px-3 sm:px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold transition disabled:opacity-50"
             >
               Simpan Draf
             </button>
             <button
               type="button"
+              disabled={isSaving || !gulaValidation.valid}
               onClick={() => handleSaveRecord('saved')}
-              className="flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl bg-[#064e3b] hover:bg-[#047857] text-white text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition active:scale-95"
+              className="flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl bg-[#064e3b] hover:bg-[#047857] text-white text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition active:scale-95 disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
-              <span>Simpan Rekapan</span>
+              <span>{isSaving ? 'Sedang menyimpan...' : hasServerRecord ? 'Simpan Perubahan' : 'Simpan Rekapan'}</span>
             </button>
           </div>
         </div>
@@ -1290,6 +1474,99 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           onSave={handleSaveCupDetail}
           onClose={() => setIsCupModalOpen(false)}
         />
+      )}
+
+      {/* In-app Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl p-5 shadow-2xl text-center space-y-3">
+            <div className="w-11 h-11 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">
+              Reset Rekapan Tanggal {date}?
+            </h3>
+            <p className="text-xs text-slate-600">
+              Isian rekapan Cabang <strong>{activeBranch}</strong> tanggal <strong>{formatDateIndo(date)}</strong> akan dikosongkan kembali. Jika sudah tersimpan di server, rekapan lama untuk tanggal ini akan dihapus.
+            </p>
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1 py-2 text-xs font-semibold rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={executeResetCurrentForm}
+                className="flex-1 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700"
+              >
+                Ya, Reset Sekarang
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HTTP 409 Conflict / Duplicate Date Resolution Modal */}
+      {conflictModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-white rounded-2xl p-5 shadow-2xl space-y-3 border border-amber-300">
+            <div className="flex items-center gap-2.5 text-amber-800">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">
+                  {conflictModal.conflictType === 'duplicate_date'
+                    ? 'Data Rekapan Tanggal Ini Sudah Ada'
+                    : 'Konflik Edit Multi-Perangkat Terdeteksi'}
+                </h3>
+                <p className="text-[11px] text-amber-800">
+                  Cabang {activeBranch} • {date}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-700 bg-amber-50 p-3 rounded-xl border border-amber-200 leading-relaxed">
+              {conflictModal.message}
+            </p>
+
+            <div className="text-[11px] text-slate-600 space-y-1">
+              <div>
+                Data di server saat ini: Omset <strong>{formatRupiah(conflictModal.serverRecord.totalOmset)}</strong> • Diperbarui oleh <strong>{conflictModal.serverRecord.lastEditedBy || conflictModal.serverRecord.createdBy}</strong>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConflictModal(null);
+                  loadDataForBranchAndDate(activeBranch, date);
+                }}
+                className="flex-1 py-2.5 px-3 rounded-xl border border-emerald-700 bg-emerald-50 text-emerald-900 text-xs font-bold hover:bg-emerald-100"
+              >
+                Muat Data Terbaru Server
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveRecord(conflictModal.pendingStatus, true)}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold"
+              >
+                Timpa dengan Data Saya
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setConflictModal(null)}
+              className="w-full py-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
