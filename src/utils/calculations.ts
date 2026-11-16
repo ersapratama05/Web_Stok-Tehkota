@@ -100,8 +100,23 @@ export function calculateTotalPengeluaran(expenses: ExpenseItem[]): number {
 }
 
 /**
- * Rumus Keuangan Wajib:
- * OMSET AKHIR = TOTAL OMSET - TOTAL PENGELUARAN - QRIS
+ * Rumus Perhitungan Omzet Kotor:
+ * OMZET KOTOR = PENGELUARAN + QRIS + OMZET BERSIH
+ */
+export function calculateOmsetKotor(
+  totalPengeluaran: number,
+  qris: number,
+  omsetBersih: number
+): number {
+  const pengeluaran = Number(totalPengeluaran) || 0;
+  const qrisVal = Number(qris) || 0;
+  const bersih = Number(omsetBersih) || 0;
+  return pengeluaran + qrisVal + bersih;
+}
+
+/**
+ * Rumus Turunan Omset Akhir / Bersih (untuk kompatibilitas data lama):
+ * OMSET BERSIH = OMZET KOTOR - PENGELUARAN - QRIS
  */
 export function calculateOmsetAkhir(totalOmset: number, totalPengeluaran: number, qris: number): number {
   const omset = Number(totalOmset) || 0;

@@ -7,6 +7,7 @@ import { createInitialStockRows, TEH_KOTA_ITEMS } from '../src/utils/itemsList';
 import {
   calculateHabisGula,
   calculateOmsetAkhir,
+  calculateOmsetKotor,
   calculateStokAkhir,
   calculateTotalPengeluaran,
   convertTransferQtyToStockQty,
@@ -896,6 +897,7 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
       expenses = [],
       totalOmset = 0,
       qris = 0,
+      omsetAkhir: bodyOmsetAkhir,
       gulaDetail,
       notes = '',
       mode, // optional: 'create' | 'update'
@@ -987,18 +989,23 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
       : [];
 
     const totalPengeluaran = calculateTotalPengeluaran(expenses);
-    const omsetAkhir = calculateOmsetAkhir(totalOmset, totalPengeluaran, qris);
+    const qrisNum = Number(qris) || 0;
+    const hasExplicitOmsetAkhir = bodyOmsetAkhir !== undefined && bodyOmsetAkhir !== null;
+    const omsetAkhir = hasExplicitOmsetAkhir
+      ? Number(bodyOmsetAkhir) || 0
+      : calculateOmsetAkhir(totalOmset, totalPengeluaran, qrisNum);
+    const computedTotalOmset = calculateOmsetKotor(totalPengeluaran, qrisNum, omsetAkhir);
     const now = new Date().toISOString();
     const editorName = req.authUser!.name || req.authUser!.username;
 
     const changes: AuditChangeDetail[] = [];
     if (targetExisting) {
-      if (targetExisting.totalOmset !== Number(totalOmset)) {
+      if (targetExisting.totalOmset !== computedTotalOmset) {
         changes.push({
           field: 'totalOmset',
           label: 'Omset Kotor',
           before: targetExisting.totalOmset,
-          after: Number(totalOmset),
+          after: computedTotalOmset,
         });
       }
       if (targetExisting.totalPengeluaran !== totalPengeluaran) {
@@ -1009,12 +1016,12 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
           after: totalPengeluaran,
         });
       }
-      if (targetExisting.qris !== Number(qris)) {
+      if (targetExisting.qris !== qrisNum) {
         changes.push({
           field: 'qris',
           label: 'QRIS / Non Tunai',
           before: targetExisting.qris,
-          after: Number(qris),
+          after: qrisNum,
         });
       }
       if (targetExisting.omsetAkhir !== omsetAkhir) {
@@ -1079,7 +1086,7 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
                 field: 'create',
                 label: 'Input Baru',
                 before: '-',
-                after: `Omset Rp ${Number(totalOmset).toLocaleString('id-ID')} • Status ${status}`,
+                after: `Omset Rp ${computedTotalOmset.toLocaleString('id-ID')} • Status ${status}`,
               },
             ]
           : changes,
@@ -1106,9 +1113,9 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
       status: status as 'draft' | 'saved' | 'final',
       stocks: normalizedStocks,
       expenses,
-      totalOmset: Number(totalOmset) || 0,
+      totalOmset: computedTotalOmset,
       totalPengeluaran,
-      qris: Number(qris) || 0,
+      qris: qrisNum,
       omsetAkhir,
       gulaDetail: normalizedGula || undefined,
       notes,
@@ -1686,7 +1693,7 @@ app.get('/api/dashboard', requireAuth, async (req: AuthedRequest, res) => {
   let totalQris = 0;
 
   for (const r of filtered) {
-    totalOmsetKotor += r.totalOmset || 0;
+    totalOmsetKotor += calculateOmsetKotor(r.totalPengeluaran || 0, r.qris || 0, r.omsetAkhir || 0);
     totalOmsetBersih += r.omsetAkhir || 0;
     totalPengeluaran += r.totalPengeluaran || 0;
     totalQris += r.qris || 0;
@@ -1722,7 +1729,7 @@ function aggregateBranchMetrics(branch: Branch, records: RekapRecord[]): BranchR
   let totalOutQty = 0;
 
   for (const r of branchRecs) {
-    omsetKotor += r.totalOmset || 0;
+    omsetKotor += calculateOmsetKotor(r.totalPengeluaran || 0, r.qris || 0, r.omsetAkhir || 0);
     pengeluaran += r.totalPengeluaran || 0;
     qris += r.qris || 0;
     omsetBersih += r.omsetAkhir || 0;
@@ -1869,7 +1876,7 @@ app.get('/api/reports/monthly', requireAuth, async (req: AuthedRequest, res) => 
     arr.push(r);
     recordsByDate.set(r.date, arr);
 
-    totalOmsetKotor += r.totalOmset || 0;
+    totalOmsetKotor += calculateOmsetKotor(r.totalPengeluaran || 0, r.qris || 0, r.omsetAkhir || 0);
     totalOmsetBersih += r.omsetAkhir || 0;
     totalPengeluaran += r.totalPengeluaran || 0;
     totalQris += r.qris || 0;
@@ -1890,7 +1897,10 @@ app.get('/api/reports/monthly', requireAuth, async (req: AuthedRequest, res) => 
     dailyData.push({
       date: fullDate,
       dayName: `${dayName}, ${d}`,
-      omsetKotor: dayRecs.reduce((s, r) => s + (r.totalOmset || 0), 0),
+      omsetKotor: dayRecs.reduce(
+        (s, r) => s + calculateOmsetKotor(r.totalPengeluaran || 0, r.qris || 0, r.omsetAkhir || 0),
+        0
+      ),
       pengeluaran: dayRecs.reduce((s, r) => s + (r.totalPengeluaran || 0), 0),
       qris: dayRecs.reduce((s, r) => s + (r.qris || 0), 0),
       omsetBersih: dayRecs.reduce((s, r) => s + (r.omsetAkhir || 0), 0),
@@ -2003,7 +2013,7 @@ app.post('/api/ai/analyze', requireAuth, async (req: AuthedRequest, res) => {
         id: r.id,
         branch: r.branch,
         date: r.date,
-        totalOmset: r.totalOmset,
+        totalOmset: calculateOmsetKotor(r.totalPengeluaran || 0, r.qris || 0, r.omsetAkhir || 0),
         pengeluaran: r.totalPengeluaran,
         qris: r.qris,
         omsetBersih: r.omsetAkhir,
@@ -2030,7 +2040,7 @@ ${promptNotes ? `Catatan Tambahan dari Owner: "${promptNotes}"` : ''}
 
 Ketentuan Khusus:
 1. Perhatikan rumus wajib SO CUP: (slop * 50) + pcs.
-2. Perhatikan rumus keuangan: Omset Akhir = Total Omset - Total Pengeluaran - QRIS.
+2. Perhatikan rumus keuangan: Omzet Kotor = Total Pengeluaran + QRIS + Omzet Bersih.
 3. Perhatikan pemakaian Gula Pasir (KG) dengan rumus: (Ambil + Gula Kemarin) - Sisa - Cair.
 4. Berikan evaluasi operasional, analisis keuangan, perbandingan cabang (jika lebih dari 1 cabang), dan 3 rekomendasi taktis.
 
@@ -2069,7 +2079,10 @@ Format respons WAJIB JSON persis dengan struktur:
       }
     }
 
-    const totalGross = relevantRecords.reduce((acc, r) => acc + r.totalOmset, 0);
+    const totalGross = relevantRecords.reduce(
+      (acc, r) => acc + calculateOmsetKotor(r.totalPengeluaran || 0, r.qris || 0, r.omsetAkhir || 0),
+      0
+    );
     const totalNet = relevantRecords.reduce((acc, r) => acc + r.omsetAkhir, 0);
     const totalExp = relevantRecords.reduce((acc, r) => acc + r.totalPengeluaran, 0);
     const totalQrisVal = relevantRecords.reduce((acc, r) => acc + r.qris, 0);
@@ -2171,7 +2184,12 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
           }))
         : [];
       const totalPengeluaran = calculateTotalPengeluaran(rec.expenses || []);
-      const omsetAkhir = calculateOmsetAkhir(rec.totalOmset || 0, totalPengeluaran, rec.qris || 0);
+      const qrisNum = Number(rec.qris) || 0;
+      const hasExplicitOmsetAkhir = rec.omsetAkhir !== undefined && rec.omsetAkhir !== null;
+      const omsetAkhir = hasExplicitOmsetAkhir
+        ? Number(rec.omsetAkhir) || 0
+        : calculateOmsetAkhir(rec.totalOmset || 0, totalPengeluaran, qrisNum);
+      const computedTotalOmset = calculateOmsetKotor(totalPengeluaran, qrisNum, omsetAkhir);
       const normalizedGula = rec.gulaDetail
         ? {
             gulaAmbil: Math.max(0, Number(rec.gulaDetail.gulaAmbil) || 0),
@@ -2201,7 +2219,7 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
             field: 'offline_sync',
             label: 'Sync Offline',
             before: existing ? 'Data sebelumnya' : '-',
-            after: `Omset Rp ${Number(rec.totalOmset || 0).toLocaleString('id-ID')}`,
+            after: `Omset Rp ${computedTotalOmset.toLocaleString('id-ID')}`,
           },
         ],
       };
@@ -2217,7 +2235,9 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
         lastEditedAt: existing ? now : undefined,
         revisionCount: (existing?.revisionCount || 0) + (existing ? 1 : 0),
         stocks: normalizedStocks,
+        totalOmset: computedTotalOmset,
         totalPengeluaran,
+        qris: qrisNum,
         omsetAkhir,
         gulaDetail: normalizedGula,
         auditLogs: [auditEntry, ...(existing?.auditLogs || [])],

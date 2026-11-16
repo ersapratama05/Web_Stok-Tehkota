@@ -5,6 +5,7 @@ import { apiFetch } from '../utils/api';
 import {
   calculateHabisGula,
   calculateOmsetAkhir,
+  calculateOmsetKotor,
   calculateStokAkhir,
   calculateTotalPengeluaran,
   formatDateIndo,
@@ -72,7 +73,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   const [date, setDate] = useState<string>(initialDate || getTodayDateStr());
   const [stocks, setStocks] = useState<StockItemRow[]>(() => createInitialStockRows());
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
-  const [totalOmset, setTotalOmset] = useState<number>(0);
+  const [omsetAkhir, setOmsetAkhir] = useState<number>(0);
   const [qris, setQris] = useState<number>(0);
   const [notes, setNotes] = useState<string>('');
   const [recordId, setRecordId] = useState<string | null>(initialRecordId || null);
@@ -116,7 +117,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
 
   // Calculations
   const totalPengeluaran = calculateTotalPengeluaran(expenses);
-  const omsetAkhir = calculateOmsetAkhir(totalOmset, totalPengeluaran, qris);
+  const totalOmset = calculateOmsetKotor(totalPengeluaran, qris, omsetAkhir);
   const habisGula = calculateHabisGula(gulaAmbil, gulaKemarin, sisaGula, gulaCair);
   const gulaValidation = validateGulaDetail({
     gulaAmbil,
@@ -153,7 +154,14 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             setPreviousGulaDate(undefined);
             setStocks(existing.stocks);
             setExpenses(existing.expenses || []);
-            setTotalOmset(existing.totalOmset || 0);
+            setOmsetAkhir(
+              existing.omsetAkhir ??
+                calculateOmsetAkhir(
+                  existing.totalOmset || 0,
+                  existing.totalPengeluaran || 0,
+                  existing.qris || 0
+                )
+            );
             setQris(existing.qris || 0);
             setNotes(existing.notes || '');
             setRevisionInfo({
@@ -193,7 +201,14 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           setRecordStatus(localDraft.status || 'draft');
           if (localDraft.stocks) setStocks(localDraft.stocks);
           if (localDraft.expenses) setExpenses(localDraft.expenses);
-          if (localDraft.totalOmset !== undefined) setTotalOmset(localDraft.totalOmset);
+          if (localDraft.omsetAkhir !== undefined) {
+            setOmsetAkhir(localDraft.omsetAkhir);
+          } else if (localDraft.totalOmset !== undefined) {
+            const draftPengeluaran = calculateTotalPengeluaran(localDraft.expenses || []);
+            setOmsetAkhir(
+              calculateOmsetAkhir(localDraft.totalOmset, draftPengeluaran, localDraft.qris || 0)
+            );
+          }
           if (localDraft.qris !== undefined) setQris(localDraft.qris);
           if (localDraft.notes) setNotes(localDraft.notes);
           if (localDraft.gulaDetail) {
@@ -256,7 +271,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         setRecordId(null);
         setRecordStatus('draft');
         setExpenses([]);
-        setTotalOmset(0);
+        setOmsetAkhir(0);
         setQris(0);
         setGulaAmbil(0);
         setGulaKemarin(autoGulaKemarin);
@@ -483,7 +498,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
       const freshRows = createInitialStockRows(prevStocksMap);
       setStocks(freshRows);
       setExpenses([]);
-      setTotalOmset(0);
+      setOmsetAkhir(0);
       setQris(0);
       setGulaAmbil(0);
       setGulaKemarin(autoGulaKemarin);
@@ -702,7 +717,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
-  }, [stocks, expenses, totalOmset, qris, notes, activeBranch, date, gulaAmbil, gulaKemarin, sisaGula, gulaCair, habisGula]);
+  }, [stocks, expenses, omsetAkhir, qris, notes, activeBranch, date, gulaAmbil, gulaKemarin, sisaGula, gulaCair, habisGula]);
 
   // Filter stocks by category and search
   const filteredStocks = stocks.filter((item) => {
@@ -1412,31 +1427,21 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             <span>Form Perhitungan Keuangan Akhir</span>
           </h3>
           <p className="text-xs text-slate-600">
-            Rumus Wajib: <code className="text-emerald-800 font-bold">OMSET AKHIR = TOTAL OMSET - TOTAL PENGELUARAN - QRIS</code>
+            Rumus Wajib: <code className="text-emerald-800 font-bold">OMZET KOTOR = PENGELUARAN + QRIS + OMZET BERSIH</code>
           </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {/* Total Omset Input */}
+          {/* Total Omset (Otomatis dari Pengeluaran + QRIS + Omzet Bersih) */}
           <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
             <label className="block text-xs font-bold text-slate-700 mb-1">
               Total Omset (Kotor)
             </label>
-            <div className="relative">
-              <span className="absolute left-3 top-2.5 text-xs text-slate-600 font-bold">
-                Rp
-              </span>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={totalOmset === 0 ? '' : formatNumberId(totalOmset)}
-                onChange={(e) => setTotalOmset(parseRupiahInput(e.target.value))}
-                placeholder="0"
-                className="w-full pl-9 pr-3 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
-              />
+            <div className="py-2 px-3 text-sm font-mono font-bold text-slate-900 bg-white rounded-lg border border-slate-300 text-right tabular-nums">
+              {formatRupiah(totalOmset)}
             </div>
             <p className="text-[10px] text-slate-600 mt-1">
-              Seluruh penjualan tunai + non-tunai
+              Pengeluaran + QRIS + Omzet Bersih
             </p>
           </div>
 
@@ -1476,16 +1481,26 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             </p>
           </div>
 
-          {/* Omset Akhir (Bersih Wajib) */}
+          {/* Omset Akhir (Setoran Bersih Input) */}
           <div className="bg-emerald-50 p-3.5 rounded-xl border-2 border-emerald-600 shadow-sm">
             <label className="block text-xs font-bold text-emerald-900 mb-1">
               Omset Akhir (Setoran Bersih)
             </label>
-            <div className="py-2 px-3 text-base sm:text-lg font-mono font-extrabold text-emerald-800 bg-white rounded-lg border border-emerald-300 text-right tabular-nums shadow-inner">
-              {formatRupiah(omsetAkhir)}
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-xs text-emerald-700 font-bold">
+                Rp
+              </span>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={omsetAkhir === 0 ? '' : formatNumberId(omsetAkhir)}
+                onChange={(e) => setOmsetAkhir(parseRupiahInput(e.target.value))}
+                placeholder="0"
+                className="w-full pl-9 pr-3 py-2 text-base sm:text-lg font-mono font-extrabold text-emerald-800 bg-white rounded-lg border border-emerald-300 focus:ring-2 focus:ring-emerald-600 outline-none text-right tabular-nums shadow-inner"
+              />
             </div>
             <p className="text-[10px] text-emerald-800 font-semibold mt-1">
-              Uang fisik tunai yang wajib disetorkan
+              Omzet setelah dikurangi pengeluaran
             </p>
           </div>
         </div>

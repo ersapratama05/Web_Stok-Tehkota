@@ -8,6 +8,7 @@ import {
   exportAiAnalysisToImage,
 } from '../utils/exportUtils';
 import { getCachedRecords } from '../utils/storage';
+import { calculateOmsetKotor } from '../utils/calculations';
 import {
   Sparkles,
   StopCircle,
@@ -72,7 +73,10 @@ export const AiAnalysisView: React.FC = () => {
       relevant = records.length > 0 ? records : [];
     }
 
-    const totalGross = relevant.reduce((acc, r) => acc + (r.totalOmset || 0), 0);
+    const totalGross = relevant.reduce(
+      (acc, r) => acc + calculateOmsetKotor(r.totalPengeluaran || 0, r.qris || 0, r.omsetAkhir || 0),
+      0
+    );
     const totalNet = relevant.reduce((acc, r) => acc + (r.omsetAkhir || 0), 0);
     const totalExp = relevant.reduce((acc, r) => acc + (r.totalPengeluaran || 0), 0);
     const totalQrisVal = relevant.reduce((acc, r) => acc + (r.qris || 0), 0);

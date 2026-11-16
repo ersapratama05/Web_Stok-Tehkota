@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { RekapRecord } from '../types';
 import { apiFetch } from '../utils/api';
-import { formatDateIndo, formatRupiah, getJakartaTimeStr } from '../utils/calculations';
+import { calculateOmsetKotor, formatDateIndo, formatRupiah, getJakartaTimeStr } from '../utils/calculations';
 import {
   removeFromSyncQueue,
   removeLocalDraft,
@@ -226,7 +226,7 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
                 Total Omset (Kotor)
               </span>
               <span className="text-base font-bold text-slate-900 font-mono tabular-nums">
-                {formatRupiah(record.totalOmset)}
+                {formatRupiah(calculateOmsetKotor(record.totalPengeluaran || 0, record.qris || 0, record.omsetAkhir || 0))}
               </span>
             </div>
             <div className="bg-rose-50/50 p-3 rounded-xl border border-rose-200">

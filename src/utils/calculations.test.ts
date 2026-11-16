@@ -6,6 +6,7 @@ import {
   calculateHabisGula,
   calculateTotalPengeluaran,
   calculateOmsetAkhir,
+  calculateOmsetKotor,
   calculateStokSelisih,
   formatNumberId,
   parseRupiahInput,
@@ -70,6 +71,27 @@ test('Rumus OMSET AKHIR = TOTAL OMSET - TOTAL PENGELUARAN - QRIS', () => {
 
   // Zero values
   assert.equal(calculateOmsetAkhir(500000, 0, 0), 500000);
+});
+
+test('Rumus OMZET KOTOR = PENGELUARAN + QRIS + OMZET BERSIH (tanpa penghitungan ganda)', () => {
+  // Contoh 1 (data riil): Pengeluaran 60.000, QRIS 780.000, Omzet Bersih 1.080.000 -> Omzet Kotor 1.920.000
+  assert.equal(calculateOmsetKotor(60000, 780000, 1080000), 1920000);
+
+  // Contoh 2 (Sompok): Pengeluaran 150.000, QRIS 450.000, Omzet Bersih 900.000 -> Omzet Kotor 1.500.000
+  const expenses = [
+    { id: 'e1', name: 'Es Batu', amount: 100000 },
+    { id: 'e2', name: 'Galon', amount: 50000 },
+  ];
+  const pengeluaran = calculateTotalPengeluaran(expenses);
+  assert.equal(pengeluaran, 150000);
+  assert.equal(calculateOmsetKotor(pengeluaran, 450000, 900000), 1500000);
+
+  // Contoh 3 (Suyudono): Pengeluaran 75.000, QRIS 325.000, Omzet Bersih 600.000 -> Omzet Kotor 1.000.000
+  assert.equal(calculateOmsetKotor(75000, 325000, 600000), 1000000);
+
+  // Zero & empty cases
+  assert.equal(calculateOmsetKotor(0, 0, 0), 0);
+  assert.equal(calculateOmsetKotor(50000, 0, 500000), 550000);
 });
 
 test('Selisih Stok SO - ST', () => {

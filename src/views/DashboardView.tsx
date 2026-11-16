@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Branch, DashboardStats, OwnerSummaryData, RekapRecord } from '../types';
 import { apiFetch } from '../utils/api';
-import { formatRupiah, formatDateIndo, getCurrentMonthStr, getJakartaTimeStr, getTodayDateStr, getYesterdayDateStr } from '../utils/calculations';
+import { calculateOmsetKotor, formatRupiah, formatDateIndo, getCurrentMonthStr, getJakartaTimeStr, getTodayDateStr, getYesterdayDateStr } from '../utils/calculations';
 import {
   clearBranchCacheAndQueue,
   computeLocalDashboardStats,
@@ -603,7 +603,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {stats ? formatRupiah(stats.totalOmsetBersih) : '...'}
           </div>
           <p className="text-[11px] text-emerald-700/80 mt-1">
-            Total Omset - Pengeluaran - QRIS
+            Omzet setelah dikurangi pengeluaran &amp; QRIS
           </p>
         </div>
 
@@ -790,7 +790,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <div className="text-[11px] text-slate-600 flex flex-wrap items-center gap-2 mt-0.5">
                         <span>Kasir: {record.createdBy}</span>
                         <span>•</span>
-                        <span>Omset Kotor: {formatRupiah(record.totalOmset)}</span>
+                        <span>Omset Kotor: {formatRupiah(calculateOmsetKotor(record.totalPengeluaran || 0, record.qris || 0, record.omsetAkhir || 0))}</span>
                         {record.gulaDetail && (
                           <>
                             <span>•</span>

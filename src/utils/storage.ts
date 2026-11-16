@@ -1,5 +1,5 @@
 import { Branch, DashboardStats, MonthlyReportData, RekapRecord } from '../types';
-import { getCurrentMonthStr } from './calculations';
+import { calculateOmsetKotor, getCurrentMonthStr } from './calculations';
 
 const DRAFT_PREFIX = 'tehkota_draft_';
 const SYNC_QUEUE_KEY = 'tehkota_sync_queue';
@@ -192,10 +192,13 @@ export function computeLocalDashboardStats(branch?: Branch | 'All', monthStr?: s
   let totalQris = 0;
 
   for (const r of monthly) {
-    totalOmsetKotor += r.totalOmset || 0;
-    totalOmsetBersih += r.omsetAkhir || 0;
-    totalPengeluaran += r.totalPengeluaran || 0;
-    totalQris += r.qris || 0;
+    const pengeluaran = Number(r.totalPengeluaran) || 0;
+    const qrisVal = Number(r.qris) || 0;
+    const omsetBersih = Number(r.omsetAkhir) || 0;
+    totalOmsetKotor += calculateOmsetKotor(pengeluaran, qrisVal, omsetBersih);
+    totalOmsetBersih += omsetBersih;
+    totalPengeluaran += pengeluaran;
+    totalQris += qrisVal;
   }
 
   const sortedRecent = [...allRecords]
@@ -236,10 +239,13 @@ export function computeLocalMonthlyReport(branch?: Branch | 'All', monthStr?: st
   let totalGulaHabis = 0;
 
   for (const r of records) {
-    totalOmsetKotor += r.totalOmset || 0;
-    totalOmsetBersih += r.omsetAkhir || 0;
-    totalPengeluaran += r.totalPengeluaran || 0;
-    totalQris += r.qris || 0;
+    const pengeluaran = Number(r.totalPengeluaran) || 0;
+    const qrisVal = Number(r.qris) || 0;
+    const omsetBersih = Number(r.omsetAkhir) || 0;
+    totalOmsetKotor += calculateOmsetKotor(pengeluaran, qrisVal, omsetBersih);
+    totalOmsetBersih += omsetBersih;
+    totalPengeluaran += pengeluaran;
+    totalQris += qrisVal;
     totalGulaHabis += r.gulaDetail?.habisGula || 0;
   }
 
@@ -257,7 +263,10 @@ export function computeLocalMonthlyReport(branch?: Branch | 'All', monthStr?: st
     dailyData.push({
       date: fullDate,
       dayName: `${dayName}, ${d}`,
-      omsetKotor: dayRecs.reduce((s, r) => s + (r.totalOmset || 0), 0),
+      omsetKotor: dayRecs.reduce(
+        (s, r) => s + calculateOmsetKotor(r.totalPengeluaran || 0, r.qris || 0, r.omsetAkhir || 0),
+        0
+      ),
       pengeluaran: dayRecs.reduce((s, r) => s + (r.totalPengeluaran || 0), 0),
       qris: dayRecs.reduce((s, r) => s + (r.qris || 0), 0),
       omsetBersih: dayRecs.reduce((s, r) => s + (r.omsetAkhir || 0), 0),
