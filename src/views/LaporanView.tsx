@@ -9,7 +9,7 @@ import {
   getTodayDateStr,
   getYesterdayDateStr,
 } from '../utils/calculations';
-import { computeLocalMonthlyReport, getCachedRecords, getLocalDraft } from '../utils/storage';
+import { computeLocalMonthlyReport, getCachedRecords, getLocalDraft, removeRecordFromLocalCache } from '../utils/storage';
 import {
   FileBarChart,
   Calendar,
@@ -104,18 +104,26 @@ export const LaporanView: React.FC<LaporanViewProps> = ({
           onOpenRecordDetail(data.record);
           return;
         }
+        if (res.status === 404) {
+          removeRecordFromLocalCache(rekapId, undefined, dateStr);
+          await fetchMonthlyReport();
+          onNavigateToRekap(dateStr);
+          return;
+        }
       } catch {
-        // fallback
+        // fallback only when network offline
       }
-      const cached = getCachedRecords().find((r) => r.id === rekapId || r.date === dateStr);
-      if (cached) {
-        onOpenRecordDetail(cached);
-        return;
-      }
-      const draft = getLocalDraft(selectedBranch === 'All' ? activeBranch : selectedBranch, dateStr);
-      if (draft) {
-        onOpenRecordDetail(draft);
-        return;
+      if (!navigator.onLine) {
+        const cached = getCachedRecords().find((r) => r.id === rekapId || r.date === dateStr);
+        if (cached) {
+          onOpenRecordDetail(cached);
+          return;
+        }
+        const draft = getLocalDraft(selectedBranch === 'All' ? activeBranch : selectedBranch, dateStr);
+        if (draft) {
+          onOpenRecordDetail(draft);
+          return;
+        }
       }
     }
     onNavigateToRekap(dateStr);

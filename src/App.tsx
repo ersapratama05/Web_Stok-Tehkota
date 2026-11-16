@@ -157,8 +157,17 @@ function AppContent() {
           record={selectedRecordForDetail}
           onClose={() => setSelectedRecordForDetail(null)}
           onEdit={handleEditRecord}
-          onDeleteSuccess={() => {
-            window.dispatchEvent(new CustomEvent('tehkota:sync-record', { detail: { event: 'record_deleted' } }));
+          onDeleteSuccess={(deletedRecord) => {
+            window.dispatchEvent(
+              new CustomEvent('tehkota:sync-record', {
+                detail: {
+                  event: 'record_deleted',
+                  deletedId: deletedRecord.id,
+                  branch: deletedRecord.branch,
+                  date: deletedRecord.date,
+                },
+              })
+            );
           }}
         />
       )}

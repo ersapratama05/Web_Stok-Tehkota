@@ -49,7 +49,10 @@ export function clearBranchDrafts(branch: string): void {
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith(`${DRAFT_PREFIX}${branch}_`)) {
+      if (!key) continue;
+      if (branch === 'All' && key.startsWith(DRAFT_PREFIX)) {
+        keysToRemove.push(key);
+      } else if (key.startsWith(`${DRAFT_PREFIX}${branch}_`)) {
         keysToRemove.push(key);
       }
     }
@@ -84,6 +87,26 @@ export function getSyncQueue(): SyncQueueItem[] {
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
+  }
+}
+
+export function removeFromSyncQueue(id?: string, branch?: string, date?: string): void {
+  try {
+    if (branch === 'All') {
+      localStorage.removeItem(SYNC_QUEUE_KEY);
+      return;
+    }
+    const queue = getSyncQueue();
+    if (queue.length === 0) return;
+    const filtered = queue.filter((q) => {
+      if (id && q.record?.id === id) return false;
+      if (branch && date && q.record?.branch === branch && q.record?.date === date) return false;
+      if (branch && !id && !date && q.record?.branch === branch) return false;
+      return true;
+    });
+    localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(filtered));
+  } catch (err) {
+    console.warn('Failed to remove from sync queue:', err);
   }
 }
 
@@ -125,6 +148,31 @@ export function saveRecordToLocal(record: RekapRecord): void {
   } catch (err) {
     console.warn('Failed to save record locally:', err);
   }
+}
+
+export function removeRecordFromLocalCache(id?: string, branch?: string, date?: string): void {
+  try {
+    if (branch === 'All') {
+      setCachedRecords([]);
+      return;
+    }
+    const existing = getCachedRecords();
+    const filtered = existing.filter((r) => {
+      if (id && r.id === id) return false;
+      if (branch && date && r.branch === branch && r.date === date) return false;
+      if (branch && !id && !date && r.branch === branch) return false;
+      return true;
+    });
+    setCachedRecords(filtered);
+  } catch (err) {
+    console.warn('Failed to remove record from local cache:', err);
+  }
+}
+
+export function clearBranchCacheAndQueue(branch: Branch | 'All'): void {
+  clearBranchDrafts(branch);
+  removeRecordFromLocalCache(undefined, branch, undefined);
+  removeFromSyncQueue(undefined, branch, undefined);
 }
 
 export function getLocalRecords(branch?: Branch | 'All'): RekapRecord[] {

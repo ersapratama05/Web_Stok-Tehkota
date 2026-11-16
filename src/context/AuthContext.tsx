@@ -1,6 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Branch, User } from '../types';
-import { clearSyncQueue, getSyncQueue, saveRecordToLocal, setCachedRecords } from '../utils/storage';
+import {
+  clearBranchCacheAndQueue,
+  clearSyncQueue,
+  getSyncQueue,
+  removeFromSyncQueue,
+  removeLocalDraft,
+  removeRecordFromLocalCache,
+  saveRecordToLocal,
+  setCachedRecords,
+} from '../utils/storage';
 import { apiFetch } from '../utils/api';
 import { getJakartaTimeStr } from '../utils/calculations';
 
@@ -131,8 +140,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             lastSyncTimestampRef.current = json.serverTime;
           }
 
-          if (json.hasDeletions) {
+          const deletedList: Array<{ id?: string; branch?: string; date?: string; isReset?: boolean }> =
+            Array.isArray(json.deletedItems) ? json.deletedItems : [];
+
+          if (json.hasDeletions || deletedList.length > 0) {
+            for (const item of deletedList) {
+              if (item.isReset) {
+                const targetB =
+                  item.branch === 'Sompok' || item.branch === 'Suyudono' || item.branch === 'All'
+                    ? item.branch
+                    : 'All';
+                clearBranchCacheAndQueue(targetB);
+              } else {
+                removeRecordFromLocalCache(item.id, item.branch, item.date);
+                if (item.branch && item.date) {
+                  removeLocalDraft(item.branch, item.date);
+                }
+                removeFromSyncQueue(item.id, item.branch, item.date);
+              }
+            }
             await refreshCentralData();
+            if (wasInitialized) {
+              setSyncNotice('Data rekapan telah dihapus/diperbarui dari perangkat lain. Tampilan disinkronkan.');
+              setTimeout(() => setSyncNotice(null), 5000);
+            }
+            window.dispatchEvent(
+              new CustomEvent('tehkota:sync-record', {
+                detail: { event: 'record_deleted', deletedItems: deletedList },
+              })
+            );
           } else if (Array.isArray(json.records) && json.records.length > 0) {
             if (!wasInitialized) {
               setCachedRecords(json.records);
@@ -225,10 +261,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               window.dispatchEvent(new CustomEvent('tehkota:sync-transfer', { detail: data }));
               window.dispatchEvent(new CustomEvent('tehkota:sync-record', { detail: data }));
             } else if (data.event === 'record_deleted' || data.event === 'batch_sync') {
+              if (data.event === 'record_deleted') {
+                removeRecordFromLocalCache(data.deletedId, data.branch, data.date);
+                if (data.branch && data.date) {
+                  removeLocalDraft(data.branch, data.date);
+                }
+                removeFromSyncQueue(data.deletedId, data.branch, data.date);
+                const actor = data.editedBy || 'Pengguna lain';
+                setSyncNotice(
+                  `Rekapan Cabang ${data.branch || '-'} (${data.date || '-'}) dihapus permanen oleh ${actor}.`
+                );
+                setTimeout(() => setSyncNotice(null), 5000);
+              } else if (
+                data.branch === 'Sompok' ||
+                data.branch === 'Suyudono' ||
+                data.branch === 'All'
+              ) {
+                clearBranchCacheAndQueue(data.branch);
+                const actor = data.editedBy || 'Owner';
+                setSyncNotice(
+                  `Data operasional ${data.branch === 'All' ? 'Sompok & Suyudono' : `Cabang ${data.branch}`} di-reset oleh ${actor}.`
+                );
+                setTimeout(() => setSyncNotice(null), 5000);
+              }
               if (data.timestamp) lastSyncTimestampRef.current = data.timestamp;
               setSyncStatus('saved');
               setLastSavedTime(`${getJakartaTimeStr()} WIB`);
-              refreshCentralData();
+              refreshCentralData().then(() => {
+                window.dispatchEvent(new CustomEvent('tehkota:sync-record', { detail: data }));
+              });
             }
           } catch {}
         };

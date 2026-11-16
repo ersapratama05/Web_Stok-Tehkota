@@ -258,6 +258,53 @@ async function cascadeSubsequentRecords(branch: Branch, fromDate: string, startS
   }
 }
 
+async function recalculateBranchChainAfterDelete(branch: Branch, deletedDate: string) {
+  const allBranch = await db.getRecords({ branch });
+  const priorRecords = allBranch
+    .filter((r) => r.date < deletedDate)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const subsequentRecords = allBranch
+    .filter((r) => r.date > deletedDate)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  if (subsequentRecords.length === 0) return;
+
+  const baseStocks = priorRecords[0]?.stocks || createInitialStockRows();
+  // Use either prior day's ST or defaultSa when no prior day exists
+  const startMap = new Map<string, number>();
+  if (priorRecords[0]) {
+    for (const item of priorRecords[0].stocks) {
+      startMap.set(item.name, item.st);
+    }
+  } else {
+    for (const def of TEH_KOTA_ITEMS) {
+      startMap.set(def.name, def.defaultSa);
+    }
+  }
+
+  let currentMap = startMap;
+  for (const subRecord of subsequentRecords) {
+    let changed = false;
+    for (const row of subRecord.stocks) {
+      const expectedSa = currentMap.get(row.name);
+      if (expectedSa !== undefined && row.sa !== expectedSa) {
+        row.sa = expectedSa;
+        row.st = calculateStokAkhir(row.sa, row.inQty, row.outQty);
+        changed = true;
+      }
+    }
+    if (changed) {
+      subRecord.updatedAt = new Date().toISOString();
+      await db.upsertRecord(subRecord);
+    }
+    const nextMap = new Map<string, number>();
+    for (const row of subRecord.stocks) {
+      nextMap.set(row.name, row.st);
+    }
+    currentMap = nextMap;
+  }
+}
+
 async function getCarryoverForDate(branch: Branch, targetDate: string) {
   const allBranch = await db.getRecords({ branch });
   const priorRecords = allBranch
@@ -727,11 +774,18 @@ app.get('/api/sync/poll', requireAuth, async (req: AuthedRequest, res) => {
     }
   }
 
-  const hasDeletions = auditLogs.some(
+  const deletionLogs = auditLogs.filter(
     (l) =>
       l.changes?.some((c) => c.field === 'delete' || c.field === 'reset') ||
       l.entityType === 'backup'
   );
+  const hasDeletions = deletionLogs.length > 0;
+  const deletedItems = deletionLogs.map((l) => ({
+    id: l.recordId,
+    branch: l.branch,
+    date: l.date,
+    isReset: Boolean(l.changes?.some((c) => c.field === 'reset')) || l.entityType === 'backup',
+  }));
 
   res.json({
     timestamp: new Date().toISOString(),
@@ -739,6 +793,7 @@ app.get('/api/sync/poll', requireAuth, async (req: AuthedRequest, res) => {
     transfers,
     auditLogs: auditLogs.slice(0, 50),
     hasDeletions,
+    deletedItems,
     hasUpdates: records.length > 0 || transfers.length > 0 || hasDeletions,
     serverTime: new Date().toISOString(),
   });
@@ -1090,86 +1145,135 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
   }
 });
 
-// 7. Delete Record (with RBAC & Audit)
+// 7. Delete Record (Transactional PostgreSQL / JSON + RBAC + Stock Recalc + Audit)
 app.delete('/api/records/:id', requireAuth, async (req: AuthedRequest, res) => {
-  const { id } = req.params;
-  const existing = await db.getRecordById(id);
-  if (!existing) {
-    return res.status(404).json({ error: 'Rekapan tidak ditemukan' });
-  }
-  if (!canAccessBranch(req.authUser!, existing.branch)) {
-    return res.status(403).json({
-      error: `Akses ditolak: Anda tidak memiliki izin menghapus rekapan Cabang ${existing.branch}.`,
+  try {
+    const { id } = req.params;
+    const existing = await db.getRecordById(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Rekapan tidak ditemukan di database' });
+    }
+    if (!canAccessBranch(req.authUser!, existing.branch)) {
+      return res.status(403).json({
+        error: `Akses ditolak: Anda tidak memiliki izin menghapus rekapan Cabang ${existing.branch}.`,
+      });
+    }
+
+    const now = new Date().toISOString();
+    const deleteResult = await db.deleteRecordWithAudit(id, (deleted) => ({
+      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      recordId: deleted.id,
+      entityType: 'rekap',
+      branch: deleted.branch,
+      date: deleted.date,
+      editedBy: req.authUser!.name,
+      timestamp: now,
+      note: `Menghapus permanen rekapan Cabang ${deleted.branch} tgl ${deleted.date}`,
+      changes: [
+        {
+          field: 'delete',
+          label: 'Hapus Rekapan',
+          before: `Omset Rp ${(deleted.totalOmset || 0).toLocaleString('id-ID')}`,
+          after: 'Dihapus Permanen',
+        },
+      ],
+    }));
+
+    if (!deleteResult) {
+      return res.status(404).json({ error: 'Rekapan sudah tidak ada di database' });
+    }
+
+    // Recalculate SA & ST on subsequent days for the affected branch
+    await recalculateBranchChainAfterDelete(deleteResult.deleted.branch, deleteResult.deleted.date);
+
+    broadcastSyncEvent({
+      event: 'record_deleted',
+      branch: deleteResult.deleted.branch,
+      date: deleteResult.deleted.date,
+      deletedId: id,
+      editedBy: req.authUser!.name,
+      auditLog: deleteResult.auditEntry,
+      timestamp: now,
+    });
+
+    res.json({
+      success: true,
+      message: `Rekapan Cabang ${deleteResult.deleted.branch} (${deleteResult.deleted.date}) berhasil dihapus permanen dari database.`,
+      deletedId: id,
+      deletedRecord: {
+        id: deleteResult.deleted.id,
+        branch: deleteResult.deleted.branch,
+        date: deleteResult.deleted.date,
+      },
+      remainingCount: deleteResult.remainingCount,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      error: 'Gagal menghapus rekapan di database: ' + (err.message || 'Server error'),
     });
   }
-
-  await db.deleteRecord(id);
-  const now = new Date().toISOString();
-
-  await db.appendAuditLog({
-    id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    recordId: id,
-    entityType: 'rekap',
-    branch: existing.branch,
-    date: existing.date,
-    editedBy: req.authUser!.name,
-    timestamp: now,
-    note: `Menghapus rekapan Cabang ${existing.branch} tgl ${existing.date}`,
-    changes: [
-      {
-        field: 'delete',
-        label: 'Hapus Rekapan',
-        before: `Omset Rp ${(existing.totalOmset || 0).toLocaleString('id-ID')}`,
-        after: 'Dihapus',
-      },
-    ],
-  });
-
-  broadcastSyncEvent({
-    event: 'record_deleted',
-    branch: existing.branch,
-    date: existing.date,
-    deletedId: id,
-    editedBy: req.authUser!.name,
-    timestamp: now,
-  });
-
-  res.json({ success: true, message: 'Rekapan berhasil dihapus dari server pusat', deletedId: id });
 });
 
-// 7b. Reset Branch Records (Owner Only + Auto-Backup before Reset)
+// 7b. Reset Operational Records (Owner Only + Transactional + Auto-Backup before Reset)
 app.post('/api/records/reset', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
-  const { branch } = req.body || {};
-  await db.createBackup(req.authUser!.name, `Auto-backup sebelum reset Cabang ${branch || 'Semua'}`);
-  const result = await db.resetBranchRecords(branch);
+  try {
+    const { branch = 'All', includeTransfers = false } = req.body || {};
+    const targetBranch = branch === 'Sompok' || branch === 'Suyudono' ? branch : 'All';
 
-  await db.appendAuditLog({
-    id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    recordId: `reset_${branch || 'All'}`,
-    entityType: 'backup',
-    branch: branch && branch !== 'All' ? branch : 'All',
-    date: getTodayDateStr(),
-    editedBy: req.authUser!.name,
-    timestamp: new Date().toISOString(),
-    note: `Reset data Cabang ${branch || 'Semua'} (backup otomatis dibuat sebelum reset)`,
-    changes: [
-      { field: 'reset', label: 'Reset Data', before: `${result.deletedCount} rekapan`, after: '0' },
-    ],
-  });
+    await db.createBackup(
+      req.authUser!.name,
+      `Auto-backup sebelum reset data operasional (${targetBranch === 'All' ? 'Sompok & Suyudono' : targetBranch})`
+    );
 
-  broadcastSyncEvent({
-    event: 'batch_sync',
-    branch,
-    editedBy: req.authUser!.name,
-    timestamp: new Date().toISOString(),
-  });
+    const now = new Date().toISOString();
+    const resetAudit: AuditLogEntry = {
+      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      recordId: `reset_${targetBranch}`,
+      entityType: 'backup',
+      branch: targetBranch,
+      date: getTodayDateStr(),
+      editedBy: req.authUser!.name,
+      timestamp: now,
+      note: `Hapus seluruh rekapan operasional ${targetBranch === 'All' ? 'Cabang Sompok & Suyudono' : `Cabang ${targetBranch}`} (akun, produk, harga & pengaturan tetap aman)`,
+      changes: [
+        {
+          field: 'reset',
+          label: 'Reset Data Operasional',
+          before: targetBranch === 'All' ? 'Sompok & Suyudono' : targetBranch,
+          after: 'Dihapus Permanen',
+        },
+      ],
+    };
 
-  res.json({
-    success: true,
-    message: `Rekapan Cabang ${branch || 'Semua'} berhasil di-reset. Backup keamanan tersimpan otomatis.`,
-    deletedCount: result.deletedCount,
-    remainingCount: result.remainingCount,
-  });
+    const result = await db.resetBranchRecords(targetBranch, {
+      includeTransfers: Boolean(includeTransfers),
+      auditEntry: resetAudit,
+    });
+
+    broadcastSyncEvent({
+      event: 'batch_sync',
+      branch: targetBranch,
+      editedBy: req.authUser!.name,
+      auditLog: resetAudit,
+      timestamp: now,
+    });
+
+    res.json({
+      success: true,
+      message:
+        targetBranch === 'All'
+          ? `Seluruh rekapan operasional Sompok & Suyudono (${result.deletedCount} rekapan) berhasil dihapus permanen. Akun, produk & pengaturan tetap terjaga.`
+          : `Rekapan Cabang ${targetBranch} (${result.deletedCount} rekapan) berhasil dihapus permanen.`,
+      branch: targetBranch,
+      deletedCount: result.deletedCount,
+      deletedTransfers: result.deletedTransfers,
+      remainingCount: result.remainingCount,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      error: 'Gagal mereset data operasional di database: ' + (err.message || 'Server error'),
+    });
+  }
 });
 
 // ----------------------------------------------------
@@ -2025,13 +2129,32 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
   }
 
   let count = 0;
+  let skippedDeleted = 0;
   const syncedRecords: RekapRecord[] = [];
   const editorName = req.authUser!.name || req.authUser!.username;
+  const recentAuditLogs = await db.getAuditLogs();
 
   for (const item of queue) {
     if (item.action === 'save_record' && item.record) {
       const rec = item.record as RekapRecord;
       if (!rec.branch || !rec.date || !canAccessBranch(req.authUser!, rec.branch)) {
+        continue;
+      }
+
+      // Guard: Never allow stale offline sync items to resurrect records deleted/reset more recently
+      const queuedTime = new Date(item.queuedAt || 0).getTime();
+      const deletedMoreRecently = recentAuditLogs.some((log) => {
+        const logTime = new Date(log.timestamp || 0).getTime();
+        if (logTime <= queuedTime) return false;
+        const isDeleteOrReset = log.changes?.some((c) => c.field === 'delete' || c.field === 'reset');
+        if (!isDeleteOrReset) return false;
+        if (log.changes?.some((c) => c.field === 'reset')) {
+          return log.branch === 'All' || log.branch === rec.branch;
+        }
+        return log.recordId === rec.id || (log.branch === rec.branch && log.date === rec.date);
+      });
+      if (deletedMoreRecently) {
+        skippedDeleted++;
         continue;
       }
 
@@ -2119,7 +2242,12 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
     });
   }
 
-  res.json({ synced: count, records: syncedRecords, message: `${count} rekapan berhasil disinkronkan` });
+  res.json({
+    synced: count,
+    skippedDeleted,
+    records: syncedRecords,
+    message: `${count} rekapan berhasil disinkronkan`,
+  });
 });
 
 // 14. Catch-all JSON 404 for unhandled API routes

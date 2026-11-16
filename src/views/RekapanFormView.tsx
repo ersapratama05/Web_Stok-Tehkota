@@ -17,7 +17,16 @@ import {
   validateGulaDetail,
 } from '../utils/calculations';
 import { createInitialStockRows } from '../utils/itemsList';
-import { addToSyncQueue, getLocalDraft, saveLocalDraft, removeLocalDraft, saveRecordToLocal, getCachedRecords } from '../utils/storage';
+import {
+  addToSyncQueue,
+  getLocalDraft,
+  saveLocalDraft,
+  removeLocalDraft,
+  saveRecordToLocal,
+  getCachedRecords,
+  removeRecordFromLocalCache,
+  removeFromSyncQueue,
+} from '../utils/storage';
 import { CupModal } from '../components/CupModal';
 import {
   Save,
@@ -48,8 +57,17 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   initialRecordId,
   onSavedSuccess,
 }) => {
-  const { user, activeBranch, setActiveBranch, isOnline, syncStatus, setSyncStatus, lastSavedTime, setLastSavedTime } =
-    useAuth();
+  const {
+    user,
+    activeBranch,
+    setActiveBranch,
+    isOnline,
+    syncStatus,
+    setSyncStatus,
+    lastSavedTime,
+    setLastSavedTime,
+    refreshCentralData,
+  } = useAuth();
 
   const [date, setDate] = useState<string>(initialDate || getTodayDateStr());
   const [stocks, setStocks] = useState<StockItemRow[]>(() => createInitialStockRows());
@@ -111,6 +129,11 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   // Load record or previous day carryover when branch or date changes
   const loadDataForBranchAndDate = useCallback(
     async (targetBranch: Branch, targetDate: string) => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      isInitialLoadRef.current = true;
       setIsLoadingRecord(true);
       setSaveMessage(null);
       setConflictModal(null);
@@ -278,19 +301,62 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     loadDataForBranchAndDate(activeBranch, date);
   }, [activeBranch, date, loadDataForBranchAndDate]);
 
-  // Listen for real-time synchronization events from other devices
+  // Listen for real-time synchronization events from other devices (including deletions & resets)
   useEffect(() => {
-    const handleSync = (e: any) => {
+    const handleSync = async (e: any) => {
       const detail = e.detail;
       if (!detail) return;
+
+      if (detail.event === 'record_deleted') {
+        const matchesSingle =
+          detail.branch === activeBranch && (!detail.date || detail.date === date);
+        const matchesList =
+          Array.isArray(detail.deletedItems) &&
+          detail.deletedItems.some(
+            (item: any) =>
+              (item.branch === 'All' || item.branch === activeBranch) &&
+              (item.isReset || !item.date || item.date === date)
+          );
+
+        if (matchesSingle || matchesList) {
+          if (autosaveTimerRef.current) {
+            clearTimeout(autosaveTimerRef.current);
+            autosaveTimerRef.current = null;
+          }
+          isInitialLoadRef.current = true;
+          removeLocalDraft(activeBranch, date);
+          removeRecordFromLocalCache(detail.deletedId, activeBranch, date);
+          removeFromSyncQueue(detail.deletedId, activeBranch, date);
+          await loadDataForBranchAndDate(activeBranch, date);
+          setSaveMessage({
+            text: `Rekapan Cabang ${activeBranch} tanggal ${formatDateIndo(date)} telah dihapus dari database server.`,
+            type: 'info',
+          });
+        }
+        return;
+      }
+
+      if (detail.event === 'batch_sync') {
+        if (!detail.branch || detail.branch === 'All' || detail.branch === activeBranch) {
+          if (autosaveTimerRef.current) {
+            clearTimeout(autosaveTimerRef.current);
+            autosaveTimerRef.current = null;
+          }
+          isInitialLoadRef.current = true;
+          removeLocalDraft(activeBranch, date);
+          await loadDataForBranchAndDate(activeBranch, date);
+        }
+        return;
+      }
+
       if (detail.branch === activeBranch && detail.date === date) {
         if (detail.event === 'record_updated' || detail.event === 'record_created') {
           const editor = detail.editedBy || 'Pengguna lain';
+          await loadDataForBranchAndDate(activeBranch, date);
           setSaveMessage({
-            text: `Data rekapan Cabang ${activeBranch} tanggal ${formatDateIndo(date)} baru saja diperbarui oleh ${editor} dari perangkat lain. Memperbarui data terbaru...`,
+            text: `Data rekapan Cabang ${activeBranch} tanggal ${formatDateIndo(date)} baru saja diperbarui oleh ${editor} dari perangkat lain.`,
             type: 'info',
           });
-          loadDataForBranchAndDate(activeBranch, date);
         }
       }
     };
@@ -364,16 +430,40 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   // Reset current form for revision (confirmed via in-app modal)
   const executeResetCurrentForm = async () => {
     setShowResetConfirm(false);
+    const targetId = recordId || `rek_${activeBranch.toLowerCase()}_${date.replace(/-/g, '')}`;
+
     try {
-      if (recordId) {
-        try {
-          await apiFetch(`/api/records/${recordId}`, { method: 'DELETE' });
-        } catch {
-          // ignore offline
+      if (hasServerRecord || recordId) {
+        if (!isOnline) {
+          setSaveMessage({
+            text: 'Gagal mereset: Penghapusan rekapan tersimpan memerlukan koneksi internet ke database server.',
+            type: 'error',
+          });
+          return;
+        }
+        setSyncStatus('saving');
+        const res = await apiFetch(`/api/records/${targetId}`, { method: 'DELETE' });
+        const resJson = await res.json().catch(() => null);
+        if (!res.ok || !resJson?.success) {
+          if (res.status !== 404) {
+            setSyncStatus('error');
+            setSaveMessage({
+              text: resJson?.error || 'Gagal menghapus rekapan dari database server.',
+              type: 'error',
+            });
+            return;
+          }
         }
       }
 
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      isInitialLoadRef.current = true;
       removeLocalDraft(activeBranch, date);
+      removeRecordFromLocalCache(targetId, activeBranch, date);
+      removeFromSyncQueue(targetId, activeBranch, date);
 
       let prevStocksMap: Record<string, number> | undefined;
       let autoGulaKemarin = 0;
@@ -406,11 +496,22 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
       setLoadedUpdatedAt(null);
       setRecordStatus('draft');
       setRevisionInfo(null);
+
+      await refreshCentralData();
+      window.dispatchEvent(
+        new CustomEvent('tehkota:sync-record', {
+          detail: { event: 'record_deleted', deletedId: targetId, branch: activeBranch, date },
+        })
+      );
+
+      setSyncStatus('saved');
+      setLastSavedTime(`${getJakartaTimeStr()} WIB`);
       setSaveMessage({
-        text: `Rekapan tanggal ${formatDateIndo(date)} berhasil di-reset dan siap diisi ulang.`,
+        text: `Rekapan tanggal ${formatDateIndo(date)} berhasil dihapus dari server dan siap diisi ulang.`,
         type: 'success',
       });
     } catch (err: any) {
+      setSyncStatus('error');
       setSaveMessage({
         text: 'Gagal mereset rekapan: ' + (err.message || 'Terjadi kesalahan'),
         type: 'error',
@@ -562,6 +663,9 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
 
   // Autosave Local Recovery Draft Debounced (1.5 seconds - backup only, not central DB)
   useEffect(() => {
+    if (isLoadingRecord || isSaving) {
+      return;
+    }
     if (isInitialLoadRef.current) {
       isInitialLoadRef.current = false;
       return;

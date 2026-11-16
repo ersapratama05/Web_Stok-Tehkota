@@ -487,26 +487,37 @@ function loadMergedFileDatabase() {
     } catch {
     }
   }
+  const localExists = localParsed !== null;
+  const tmpExists = tmpParsed !== null;
+  const tmpMutationTs = new Date(tmpParsed?.lastMutationAt || 0).getTime();
+  const localMutationTs = new Date(localParsed?.lastMutationAt || 0).getTime();
   const mergedRecordsMap = /* @__PURE__ */ new Map();
-  const hasExistingFile = Boolean(
-    localParsed && Array.isArray(localParsed.records) && localParsed.records.length > 0 || tmpParsed && Array.isArray(tmpParsed.records) && tmpParsed.records.length > 0
-  );
-  if (!hasExistingFile) {
+  if (!localExists && !tmpExists) {
     for (const r of generateDefaultRecords()) {
       mergedRecordsMap.set(`${r.branch}_${r.date}`, r);
     }
-  }
-  if (localParsed && Array.isArray(localParsed.records)) {
-    for (const r of localParsed.records) {
+  } else if (tmpExists && tmpParsed?.initialized && tmpMutationTs >= localMutationTs) {
+    for (const r of tmpParsed.records || []) {
       mergedRecordsMap.set(`${r.branch}_${r.date}`, r);
     }
-  }
-  if (tmpParsed && Array.isArray(tmpParsed.records)) {
-    for (const r of tmpParsed.records) {
-      const key = `${r.branch}_${r.date}`;
-      const existing = mergedRecordsMap.get(key);
-      if (!existing || new Date(r.updatedAt || r.createdAt || 0).getTime() >= new Date(existing.updatedAt || existing.createdAt || 0).getTime()) {
-        mergedRecordsMap.set(key, r);
+  } else {
+    const hasSeedFlag = localParsed?.initialized === true || localParsed?.auditLogs && localParsed.auditLogs.length > 0 || localParsed?.backups && localParsed.backups.length > 0;
+    if (!hasSeedFlag && (!localParsed?.records || localParsed.records.length === 0) && (!tmpParsed?.records || tmpParsed.records.length === 0)) {
+      for (const r of generateDefaultRecords()) {
+        mergedRecordsMap.set(`${r.branch}_${r.date}`, r);
+      }
+    } else {
+      for (const r of localParsed?.records || []) {
+        mergedRecordsMap.set(`${r.branch}_${r.date}`, r);
+      }
+      if (tmpParsed && Array.isArray(tmpParsed.records)) {
+        for (const r of tmpParsed.records) {
+          const key = `${r.branch}_${r.date}`;
+          const existing = mergedRecordsMap.get(key);
+          if (!existing || new Date(r.updatedAt || r.createdAt || 0).getTime() >= new Date(existing.updatedAt || existing.createdAt || 0).getTime()) {
+            mergedRecordsMap.set(key, r);
+          }
+        }
       }
     }
   }
@@ -556,6 +567,8 @@ function loadMergedFileDatabase() {
   );
   const finalBackups = [...localParsed?.backups || tmpParsed?.backups || []];
   return {
+    initialized: true,
+    lastMutationAt: tmpParsed?.lastMutationAt || localParsed?.lastMutationAt || (/* @__PURE__ */ new Date()).toISOString(),
     users: Array.from(userMap.values()),
     records: finalRecords,
     transfers: finalTransfers,
@@ -564,6 +577,8 @@ function loadMergedFileDatabase() {
   };
 }
 function saveFileDatabase(schema) {
+  schema.initialized = true;
+  schema.lastMutationAt = (/* @__PURE__ */ new Date()).toISOString();
   const jsonStr = JSON.stringify(schema, null, 2);
   try {
     if (!fs.existsSync(localDataDir)) fs.mkdirSync(localDataDir, { recursive: true });
@@ -676,6 +691,12 @@ var UnifiedDatabase = class {
         users_count INTEGER NOT NULL,
         snapshot JSONB NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS tk_app_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     `);
   }
   async migrateFileToPostgresIfEmpty(seed) {
@@ -700,20 +721,40 @@ var UnifiedDatabase = class {
         );
       }
     }
-    const recRes = await this.pool.query("SELECT COUNT(*)::int AS cnt FROM tk_records");
-    if ((recRes.rows[0]?.cnt || 0) === 0 && seed.records.length > 0) {
+    const metaRes = await this.pool.query(
+      `SELECT value FROM tk_app_meta WHERE key = 'initial_seed_completed' LIMIT 1`
+    );
+    if (metaRes.rows[0]?.value === "true") {
+      return;
+    }
+    const [recRes, trRes, audRes, bakRes] = await Promise.all([
+      this.pool.query("SELECT COUNT(*)::int AS cnt FROM tk_records"),
+      this.pool.query("SELECT COUNT(*)::int AS cnt FROM tk_transfers"),
+      this.pool.query("SELECT COUNT(*)::int AS cnt FROM tk_audit_logs"),
+      this.pool.query("SELECT COUNT(*)::int AS cnt FROM tk_backups")
+    ]);
+    const hasAnyPriorData = (recRes.rows[0]?.cnt || 0) > 0 || (trRes.rows[0]?.cnt || 0) > 0 || (audRes.rows[0]?.cnt || 0) > 0 || (bakRes.rows[0]?.cnt || 0) > 0;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    if (hasAnyPriorData) {
+      await this.pool.query(
+        `INSERT INTO tk_app_meta (key, value, updated_at) VALUES ('initial_seed_completed', 'true', $1)
+         ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = EXCLUDED.updated_at`,
+        [now]
+      );
+      return;
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
       for (const r of seed.records) {
-        await this.pool.query(
+        await client.query(
           `INSERT INTO tk_records (id, branch, date, updated_at, data)
            VALUES ($1,$2,$3,$4,$5) ON CONFLICT (branch, date) DO NOTHING`,
-          [r.id, r.branch, r.date, r.updatedAt || r.createdAt || (/* @__PURE__ */ new Date()).toISOString(), JSON.stringify(r)]
+          [r.id, r.branch, r.date, r.updatedAt || r.createdAt || now, JSON.stringify(r)]
         );
       }
-    }
-    const trRes = await this.pool.query("SELECT COUNT(*)::int AS cnt FROM tk_transfers");
-    if ((trRes.rows[0]?.cnt || 0) === 0 && seed.transfers.length > 0) {
       for (const t of seed.transfers) {
-        await this.pool.query(
+        await client.query(
           `INSERT INTO tk_transfers (id, transfer_number, date, sender_branch, receiver_branch, status, updated_at, data)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING`,
           [
@@ -728,16 +769,24 @@ var UnifiedDatabase = class {
           ]
         );
       }
-    }
-    const audRes = await this.pool.query("SELECT COUNT(*)::int AS cnt FROM tk_audit_logs");
-    if ((audRes.rows[0]?.cnt || 0) === 0 && seed.auditLogs.length > 0) {
       for (const a of seed.auditLogs) {
-        await this.pool.query(
+        await client.query(
           `INSERT INTO tk_audit_logs (id, record_id, branch, timestamp, data)
            VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING`,
           [a.id, a.recordId, a.branch, a.timestamp, JSON.stringify(a)]
         );
       }
+      await client.query(
+        `INSERT INTO tk_app_meta (key, value, updated_at) VALUES ('initial_seed_completed', 'true', $1)
+         ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = EXCLUDED.updated_at`,
+        [now]
+      );
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
   }
   getStorageInfo() {
@@ -906,8 +955,23 @@ var UnifiedDatabase = class {
   async deleteRecord(id) {
     await this.init();
     if (this.pool && this.mode === "postgresql") {
-      const res = await this.pool.query("DELETE FROM tk_records WHERE id = $1 RETURNING data", [id]);
-      return res.rows[0]?.data || null;
+      const client = await this.pool.connect();
+      try {
+        await client.query("BEGIN");
+        const res = await client.query("DELETE FROM tk_records WHERE id = $1 RETURNING data", [id]);
+        await client.query(
+          `INSERT INTO tk_app_meta (key, value, updated_at) VALUES ('initial_seed_completed', 'true', $1)
+           ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = EXCLUDED.updated_at`,
+          [(/* @__PURE__ */ new Date()).toISOString()]
+        );
+        await client.query("COMMIT");
+        return res.rows[0]?.data || null;
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
     }
     const idx = this.fileDb.records.findIndex((r) => r.id === id);
     if (idx === -1) return null;
@@ -915,29 +979,137 @@ var UnifiedDatabase = class {
     saveFileDatabase(this.fileDb);
     return deleted;
   }
-  async resetBranchRecords(branch) {
+  async deleteRecordWithAudit(id, auditFactory) {
     await this.init();
     if (this.pool && this.mode === "postgresql") {
-      let deletedCount = 0;
-      if (branch && branch !== "All") {
-        const res = await this.pool.query("DELETE FROM tk_records WHERE branch = $1", [branch]);
-        deletedCount = res.rowCount || 0;
-      } else {
-        const res = await this.pool.query("DELETE FROM tk_records");
-        deletedCount = res.rowCount || 0;
+      const client = await this.pool.connect();
+      try {
+        await client.query("BEGIN");
+        const res = await client.query("DELETE FROM tk_records WHERE id = $1 RETURNING data", [id]);
+        const deleted2 = res.rows[0]?.data || null;
+        if (!deleted2) {
+          await client.query("ROLLBACK");
+          return null;
+        }
+        const auditEntry2 = auditFactory(deleted2);
+        await client.query(
+          `INSERT INTO tk_audit_logs (id, record_id, branch, timestamp, data)
+           VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING`,
+          [auditEntry2.id, auditEntry2.recordId, auditEntry2.branch, auditEntry2.timestamp, JSON.stringify(auditEntry2)]
+        );
+        await client.query(
+          `INSERT INTO tk_app_meta (key, value, updated_at) VALUES ('initial_seed_completed', 'true', $1)
+           ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = EXCLUDED.updated_at`,
+          [(/* @__PURE__ */ new Date()).toISOString()]
+        );
+        const rem = await client.query("SELECT COUNT(*)::int AS cnt FROM tk_records");
+        await client.query("COMMIT");
+        return {
+          deleted: deleted2,
+          auditEntry: auditEntry2,
+          remainingCount: rem.rows[0]?.cnt || 0
+        };
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
       }
-      const rem = await this.pool.query("SELECT COUNT(*)::int AS cnt FROM tk_records");
-      return { deletedCount, remainingCount: rem.rows[0]?.cnt || 0 };
+    }
+    const idx = this.fileDb.records.findIndex((r) => r.id === id);
+    if (idx === -1) return null;
+    const [deleted] = this.fileDb.records.splice(idx, 1);
+    const auditEntry = auditFactory(deleted);
+    this.fileDb.auditLogs.unshift(auditEntry);
+    if (this.fileDb.auditLogs.length > 500) {
+      this.fileDb.auditLogs = this.fileDb.auditLogs.slice(0, 500);
+    }
+    saveFileDatabase(this.fileDb);
+    return {
+      deleted,
+      auditEntry,
+      remainingCount: this.fileDb.records.length
+    };
+  }
+  async resetBranchRecords(branch, options) {
+    await this.init();
+    const includeTransfers = Boolean(options?.includeTransfers);
+    if (this.pool && this.mode === "postgresql") {
+      const client = await this.pool.connect();
+      try {
+        await client.query("BEGIN");
+        let deletedCount = 0;
+        let deletedTransfers = 0;
+        if (branch && branch !== "All") {
+          const res = await client.query("DELETE FROM tk_records WHERE branch = $1", [branch]);
+          deletedCount = res.rowCount || 0;
+          if (includeTransfers) {
+            const trRes = await client.query(
+              "DELETE FROM tk_transfers WHERE sender_branch = $1 OR receiver_branch = $1",
+              [branch]
+            );
+            deletedTransfers = trRes.rowCount || 0;
+          }
+        } else {
+          const res = await client.query("DELETE FROM tk_records");
+          deletedCount = res.rowCount || 0;
+          if (includeTransfers) {
+            const trRes = await client.query("DELETE FROM tk_transfers");
+            deletedTransfers = trRes.rowCount || 0;
+          }
+        }
+        if (options?.auditEntry) {
+          const a = options.auditEntry;
+          await client.query(
+            `INSERT INTO tk_audit_logs (id, record_id, branch, timestamp, data)
+             VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING`,
+            [a.id, a.recordId, a.branch, a.timestamp, JSON.stringify(a)]
+          );
+        }
+        await client.query(
+          `INSERT INTO tk_app_meta (key, value, updated_at) VALUES ('initial_seed_completed', 'true', $1)
+           ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = EXCLUDED.updated_at`,
+          [(/* @__PURE__ */ new Date()).toISOString()]
+        );
+        const rem = await client.query("SELECT COUNT(*)::int AS cnt FROM tk_records");
+        await client.query("COMMIT");
+        return {
+          deletedCount,
+          deletedTransfers,
+          remainingCount: rem.rows[0]?.cnt || 0
+        };
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
     }
     const initialCount = this.fileDb.records.length;
+    const initialTransfers = this.fileDb.transfers.length;
     if (branch && branch !== "All") {
       this.fileDb.records = this.fileDb.records.filter((r) => r.branch !== branch);
+      if (includeTransfers) {
+        this.fileDb.transfers = this.fileDb.transfers.filter(
+          (t) => t.senderBranch !== branch && t.receiverBranch !== branch
+        );
+      }
     } else {
       this.fileDb.records = [];
+      if (includeTransfers) {
+        this.fileDb.transfers = [];
+      }
+    }
+    if (options?.auditEntry) {
+      this.fileDb.auditLogs.unshift(options.auditEntry);
+      if (this.fileDb.auditLogs.length > 500) {
+        this.fileDb.auditLogs = this.fileDb.auditLogs.slice(0, 500);
+      }
     }
     saveFileDatabase(this.fileDb);
     return {
       deletedCount: initialCount - this.fileDb.records.length,
+      deletedTransfers: initialTransfers - this.fileDb.transfers.length,
       remainingCount: this.fileDb.records.length
     };
   }
@@ -1284,6 +1456,44 @@ async function cascadeSubsequentRecords(branch, fromDate, startStocks) {
       await db.upsertRecord(subRecord);
     }
     currentPrevStocks = subRecord.stocks;
+  }
+}
+async function recalculateBranchChainAfterDelete(branch, deletedDate) {
+  const allBranch = await db.getRecords({ branch });
+  const priorRecords = allBranch.filter((r) => r.date < deletedDate).sort((a, b) => b.date.localeCompare(a.date));
+  const subsequentRecords = allBranch.filter((r) => r.date > deletedDate).sort((a, b) => a.date.localeCompare(b.date));
+  if (subsequentRecords.length === 0) return;
+  const baseStocks = priorRecords[0]?.stocks || createInitialStockRows();
+  const startMap = /* @__PURE__ */ new Map();
+  if (priorRecords[0]) {
+    for (const item of priorRecords[0].stocks) {
+      startMap.set(item.name, item.st);
+    }
+  } else {
+    for (const def of TEH_KOTA_ITEMS) {
+      startMap.set(def.name, def.defaultSa);
+    }
+  }
+  let currentMap = startMap;
+  for (const subRecord of subsequentRecords) {
+    let changed = false;
+    for (const row of subRecord.stocks) {
+      const expectedSa = currentMap.get(row.name);
+      if (expectedSa !== void 0 && row.sa !== expectedSa) {
+        row.sa = expectedSa;
+        row.st = calculateStokAkhir(row.sa, row.inQty, row.outQty);
+        changed = true;
+      }
+    }
+    if (changed) {
+      subRecord.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      await db.upsertRecord(subRecord);
+    }
+    const nextMap = /* @__PURE__ */ new Map();
+    for (const row of subRecord.stocks) {
+      nextMap.set(row.name, row.st);
+    }
+    currentMap = nextMap;
   }
 }
 async function getCarryoverForDate(branch, targetDate) {
@@ -1664,15 +1874,23 @@ app.get("/api/sync/poll", requireAuth, async (req, res) => {
       auditLogs = auditLogs.filter((l) => new Date(l.timestamp || 0).getTime() > sinceTime);
     }
   }
-  const hasDeletions = auditLogs.some(
+  const deletionLogs = auditLogs.filter(
     (l) => l.changes?.some((c) => c.field === "delete" || c.field === "reset") || l.entityType === "backup"
   );
+  const hasDeletions = deletionLogs.length > 0;
+  const deletedItems = deletionLogs.map((l) => ({
+    id: l.recordId,
+    branch: l.branch,
+    date: l.date,
+    isReset: Boolean(l.changes?.some((c) => c.field === "reset")) || l.entityType === "backup"
+  }));
   res.json({
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
     records,
     transfers,
     auditLogs: auditLogs.slice(0, 50),
     hasDeletions,
+    deletedItems,
     hasUpdates: records.length > 0 || transfers.length > 0 || hasDeletions,
     serverTime: (/* @__PURE__ */ new Date()).toISOString()
   });
@@ -1942,75 +2160,117 @@ app.post("/api/records", requireAuth, async (req, res) => {
   }
 });
 app.delete("/api/records/:id", requireAuth, async (req, res) => {
-  const { id } = req.params;
-  const existing = await db.getRecordById(id);
-  if (!existing) {
-    return res.status(404).json({ error: "Rekapan tidak ditemukan" });
-  }
-  if (!canAccessBranch(req.authUser, existing.branch)) {
-    return res.status(403).json({
-      error: `Akses ditolak: Anda tidak memiliki izin menghapus rekapan Cabang ${existing.branch}.`
+  try {
+    const { id } = req.params;
+    const existing = await db.getRecordById(id);
+    if (!existing) {
+      return res.status(404).json({ error: "Rekapan tidak ditemukan di database" });
+    }
+    if (!canAccessBranch(req.authUser, existing.branch)) {
+      return res.status(403).json({
+        error: `Akses ditolak: Anda tidak memiliki izin menghapus rekapan Cabang ${existing.branch}.`
+      });
+    }
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const deleteResult = await db.deleteRecordWithAudit(id, (deleted) => ({
+      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      recordId: deleted.id,
+      entityType: "rekap",
+      branch: deleted.branch,
+      date: deleted.date,
+      editedBy: req.authUser.name,
+      timestamp: now,
+      note: `Menghapus permanen rekapan Cabang ${deleted.branch} tgl ${deleted.date}`,
+      changes: [
+        {
+          field: "delete",
+          label: "Hapus Rekapan",
+          before: `Omset Rp ${(deleted.totalOmset || 0).toLocaleString("id-ID")}`,
+          after: "Dihapus Permanen"
+        }
+      ]
+    }));
+    if (!deleteResult) {
+      return res.status(404).json({ error: "Rekapan sudah tidak ada di database" });
+    }
+    await recalculateBranchChainAfterDelete(deleteResult.deleted.branch, deleteResult.deleted.date);
+    broadcastSyncEvent({
+      event: "record_deleted",
+      branch: deleteResult.deleted.branch,
+      date: deleteResult.deleted.date,
+      deletedId: id,
+      editedBy: req.authUser.name,
+      auditLog: deleteResult.auditEntry,
+      timestamp: now
+    });
+    res.json({
+      success: true,
+      message: `Rekapan Cabang ${deleteResult.deleted.branch} (${deleteResult.deleted.date}) berhasil dihapus permanen dari database.`,
+      deletedId: id,
+      deletedRecord: {
+        id: deleteResult.deleted.id,
+        branch: deleteResult.deleted.branch,
+        date: deleteResult.deleted.date
+      },
+      remainingCount: deleteResult.remainingCount
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: "Gagal menghapus rekapan di database: " + (err.message || "Server error")
     });
   }
-  await db.deleteRecord(id);
-  const now = (/* @__PURE__ */ new Date()).toISOString();
-  await db.appendAuditLog({
-    id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    recordId: id,
-    entityType: "rekap",
-    branch: existing.branch,
-    date: existing.date,
-    editedBy: req.authUser.name,
-    timestamp: now,
-    note: `Menghapus rekapan Cabang ${existing.branch} tgl ${existing.date}`,
-    changes: [
-      {
-        field: "delete",
-        label: "Hapus Rekapan",
-        before: `Omset Rp ${(existing.totalOmset || 0).toLocaleString("id-ID")}`,
-        after: "Dihapus"
-      }
-    ]
-  });
-  broadcastSyncEvent({
-    event: "record_deleted",
-    branch: existing.branch,
-    date: existing.date,
-    deletedId: id,
-    editedBy: req.authUser.name,
-    timestamp: now
-  });
-  res.json({ success: true, message: "Rekapan berhasil dihapus dari server pusat", deletedId: id });
 });
 app.post("/api/records/reset", requireAuth, requireAdmin, async (req, res) => {
-  const { branch } = req.body || {};
-  await db.createBackup(req.authUser.name, `Auto-backup sebelum reset Cabang ${branch || "Semua"}`);
-  const result = await db.resetBranchRecords(branch);
-  await db.appendAuditLog({
-    id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    recordId: `reset_${branch || "All"}`,
-    entityType: "backup",
-    branch: branch && branch !== "All" ? branch : "All",
-    date: getTodayDateStr(),
-    editedBy: req.authUser.name,
-    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    note: `Reset data Cabang ${branch || "Semua"} (backup otomatis dibuat sebelum reset)`,
-    changes: [
-      { field: "reset", label: "Reset Data", before: `${result.deletedCount} rekapan`, after: "0" }
-    ]
-  });
-  broadcastSyncEvent({
-    event: "batch_sync",
-    branch,
-    editedBy: req.authUser.name,
-    timestamp: (/* @__PURE__ */ new Date()).toISOString()
-  });
-  res.json({
-    success: true,
-    message: `Rekapan Cabang ${branch || "Semua"} berhasil di-reset. Backup keamanan tersimpan otomatis.`,
-    deletedCount: result.deletedCount,
-    remainingCount: result.remainingCount
-  });
+  try {
+    const { branch = "All", includeTransfers = false } = req.body || {};
+    const targetBranch = branch === "Sompok" || branch === "Suyudono" ? branch : "All";
+    await db.createBackup(
+      req.authUser.name,
+      `Auto-backup sebelum reset data operasional (${targetBranch === "All" ? "Sompok & Suyudono" : targetBranch})`
+    );
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const resetAudit = {
+      id: `audit_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      recordId: `reset_${targetBranch}`,
+      entityType: "backup",
+      branch: targetBranch,
+      date: getTodayDateStr(),
+      editedBy: req.authUser.name,
+      timestamp: now,
+      note: `Hapus seluruh rekapan operasional ${targetBranch === "All" ? "Cabang Sompok & Suyudono" : `Cabang ${targetBranch}`} (akun, produk, harga & pengaturan tetap aman)`,
+      changes: [
+        {
+          field: "reset",
+          label: "Reset Data Operasional",
+          before: targetBranch === "All" ? "Sompok & Suyudono" : targetBranch,
+          after: "Dihapus Permanen"
+        }
+      ]
+    };
+    const result = await db.resetBranchRecords(targetBranch, {
+      includeTransfers: Boolean(includeTransfers),
+      auditEntry: resetAudit
+    });
+    broadcastSyncEvent({
+      event: "batch_sync",
+      branch: targetBranch,
+      editedBy: req.authUser.name,
+      auditLog: resetAudit,
+      timestamp: now
+    });
+    res.json({
+      success: true,
+      message: targetBranch === "All" ? `Seluruh rekapan operasional Sompok & Suyudono (${result.deletedCount} rekapan) berhasil dihapus permanen. Akun, produk & pengaturan tetap terjaga.` : `Rekapan Cabang ${targetBranch} (${result.deletedCount} rekapan) berhasil dihapus permanen.`,
+      branch: targetBranch,
+      deletedCount: result.deletedCount,
+      deletedTransfers: result.deletedTransfers,
+      remainingCount: result.remainingCount
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: "Gagal mereset data operasional di database: " + (err.message || "Server error")
+    });
+  }
 });
 app.get("/api/transfers", requireAuth, async (req, res) => {
   const { branch, status, startDate, endDate, search } = req.query;
@@ -2721,12 +2981,29 @@ app.post("/api/sync", requireAuth, async (req, res) => {
     return res.json({ synced: 0, records: [] });
   }
   let count = 0;
+  let skippedDeleted = 0;
   const syncedRecords = [];
   const editorName = req.authUser.name || req.authUser.username;
+  const recentAuditLogs = await db.getAuditLogs();
   for (const item of queue) {
     if (item.action === "save_record" && item.record) {
       const rec = item.record;
       if (!rec.branch || !rec.date || !canAccessBranch(req.authUser, rec.branch)) {
+        continue;
+      }
+      const queuedTime = new Date(item.queuedAt || 0).getTime();
+      const deletedMoreRecently = recentAuditLogs.some((log) => {
+        const logTime = new Date(log.timestamp || 0).getTime();
+        if (logTime <= queuedTime) return false;
+        const isDeleteOrReset = log.changes?.some((c) => c.field === "delete" || c.field === "reset");
+        if (!isDeleteOrReset) return false;
+        if (log.changes?.some((c) => c.field === "reset")) {
+          return log.branch === "All" || log.branch === rec.branch;
+        }
+        return log.recordId === rec.id || log.branch === rec.branch && log.date === rec.date;
+      });
+      if (deletedMoreRecently) {
+        skippedDeleted++;
         continue;
       }
       const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -2804,7 +3081,12 @@ app.post("/api/sync", requireAuth, async (req, res) => {
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     });
   }
-  res.json({ synced: count, records: syncedRecords, message: `${count} rekapan berhasil disinkronkan` });
+  res.json({
+    synced: count,
+    skippedDeleted,
+    records: syncedRecords,
+    message: `${count} rekapan berhasil disinkronkan`
+  });
 });
 app.all(["/api", "/api/*"], (req, res) => {
   res.status(404).json({

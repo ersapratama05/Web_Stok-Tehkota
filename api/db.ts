@@ -46,6 +46,8 @@ export interface StoredBackup {
 }
 
 export interface DatabaseSchema {
+  initialized?: boolean;
+  lastMutationAt?: string;
   users: DbUser[];
   records: RekapRecord[];
   transfers: BranchTransfer[];
@@ -304,35 +306,50 @@ function loadMergedFileDatabase(): DatabaseSchema {
     } catch {}
   }
 
-  // Merge records safely
-  const mergedRecordsMap = new Map<string, RekapRecord>();
-  const hasExistingFile = Boolean(
-    (localParsed && Array.isArray(localParsed.records) && localParsed.records.length > 0) ||
-      (tmpParsed && Array.isArray(tmpParsed.records) && tmpParsed.records.length > 0)
-  );
+  // Determine whether database already existed (even if all operational records were deleted -> [])
+  const localExists = localParsed !== null;
+  const tmpExists = tmpParsed !== null;
+  const tmpMutationTs = new Date(tmpParsed?.lastMutationAt || 0).getTime();
+  const localMutationTs = new Date(localParsed?.lastMutationAt || 0).getTime();
 
-  if (!hasExistingFile) {
+  const mergedRecordsMap = new Map<string, RekapRecord>();
+
+  if (!localExists && !tmpExists) {
+    // Brand-new installation with no DB files anywhere -> seed initial sample data once
     for (const r of generateDefaultRecords()) {
       mergedRecordsMap.set(`${r.branch}_${r.date}`, r);
     }
-  }
-
-  if (localParsed && Array.isArray(localParsed.records)) {
-    for (const r of localParsed.records) {
+  } else if (tmpExists && tmpParsed?.initialized && tmpMutationTs >= localMutationTs) {
+    // tmp holds newer authoritative mutations (including intentional deletions -> must NOT merge old deleted rows back from localParsed)
+    for (const r of tmpParsed.records || []) {
       mergedRecordsMap.set(`${r.branch}_${r.date}`, r);
     }
-  }
-
-  if (tmpParsed && Array.isArray(tmpParsed.records)) {
-    for (const r of tmpParsed.records) {
-      const key = `${r.branch}_${r.date}`;
-      const existing = mergedRecordsMap.get(key);
-      if (
-        !existing ||
-        new Date(r.updatedAt || r.createdAt || 0).getTime() >=
-          new Date(existing.updatedAt || existing.createdAt || 0).getTime()
-      ) {
-        mergedRecordsMap.set(key, r);
+  } else {
+    // Load authoritative local file (respecting empty array [] when initialized or auditLogs exist)
+    const hasSeedFlag =
+      localParsed?.initialized === true ||
+      (localParsed?.auditLogs && localParsed.auditLogs.length > 0) ||
+      (localParsed?.backups && localParsed.backups.length > 0);
+    if (!hasSeedFlag && (!localParsed?.records || localParsed.records.length === 0) && (!tmpParsed?.records || tmpParsed.records.length === 0)) {
+      for (const r of generateDefaultRecords()) {
+        mergedRecordsMap.set(`${r.branch}_${r.date}`, r);
+      }
+    } else {
+      for (const r of localParsed?.records || []) {
+        mergedRecordsMap.set(`${r.branch}_${r.date}`, r);
+      }
+      if (tmpParsed && Array.isArray(tmpParsed.records)) {
+        for (const r of tmpParsed.records) {
+          const key = `${r.branch}_${r.date}`;
+          const existing = mergedRecordsMap.get(key);
+          if (
+            !existing ||
+            new Date(r.updatedAt || r.createdAt || 0).getTime() >=
+              new Date(existing.updatedAt || existing.createdAt || 0).getTime()
+          ) {
+            mergedRecordsMap.set(key, r);
+          }
+        }
       }
     }
   }
@@ -398,6 +415,11 @@ function loadMergedFileDatabase(): DatabaseSchema {
   const finalBackups = [...(localParsed?.backups || tmpParsed?.backups || [])];
 
   return {
+    initialized: true,
+    lastMutationAt:
+      tmpParsed?.lastMutationAt ||
+      localParsed?.lastMutationAt ||
+      new Date().toISOString(),
     users: Array.from(userMap.values()),
     records: finalRecords,
     transfers: finalTransfers,
@@ -407,6 +429,8 @@ function loadMergedFileDatabase(): DatabaseSchema {
 }
 
 function saveFileDatabase(schema: DatabaseSchema) {
+  schema.initialized = true;
+  schema.lastMutationAt = new Date().toISOString();
   const jsonStr = JSON.stringify(schema, null, 2);
   try {
     if (!fs.existsSync(localDataDir)) fs.mkdirSync(localDataDir, { recursive: true });
@@ -524,11 +548,19 @@ class UnifiedDatabase {
         users_count INTEGER NOT NULL,
         snapshot JSONB NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS tk_app_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
     `);
   }
 
   private async migrateFileToPostgresIfEmpty(seed: DatabaseSchema): Promise<void> {
     if (!this.pool) return;
+
+    // 1. Always preserve/ensure base accounts exist ONLY if tk_users has 0 rows
     const userRes = await this.pool.query('SELECT COUNT(*)::int AS cnt FROM tk_users');
     if ((userRes.rows[0]?.cnt || 0) === 0) {
       for (const u of seed.users) {
@@ -550,21 +582,50 @@ class UnifiedDatabase {
       }
     }
 
-    const recRes = await this.pool.query('SELECT COUNT(*)::int AS cnt FROM tk_records');
-    if ((recRes.rows[0]?.cnt || 0) === 0 && seed.records.length > 0) {
-      for (const r of seed.records) {
-        await this.pool.query(
-          `INSERT INTO tk_records (id, branch, date, updated_at, data)
-           VALUES ($1,$2,$3,$4,$5) ON CONFLICT (branch, date) DO NOTHING`,
-          [r.id, r.branch, r.date, r.updatedAt || r.createdAt || new Date().toISOString(), JSON.stringify(r)]
-        );
-      }
+    // 2. Check one-time seed marker so intentionally deleted records are NEVER resurrected!
+    const metaRes = await this.pool.query(
+      `SELECT value FROM tk_app_meta WHERE key = 'initial_seed_completed' LIMIT 1`
+    );
+    if (metaRes.rows[0]?.value === 'true') {
+      return;
     }
 
-    const trRes = await this.pool.query('SELECT COUNT(*)::int AS cnt FROM tk_transfers');
-    if ((trRes.rows[0]?.cnt || 0) === 0 && seed.transfers.length > 0) {
+    // Check whether this PostgreSQL DB already had any operational activity before v1.4.0 upgrade
+    const [recRes, trRes, audRes, bakRes] = await Promise.all([
+      this.pool.query('SELECT COUNT(*)::int AS cnt FROM tk_records'),
+      this.pool.query('SELECT COUNT(*)::int AS cnt FROM tk_transfers'),
+      this.pool.query('SELECT COUNT(*)::int AS cnt FROM tk_audit_logs'),
+      this.pool.query('SELECT COUNT(*)::int AS cnt FROM tk_backups'),
+    ]);
+    const hasAnyPriorData =
+      (recRes.rows[0]?.cnt || 0) > 0 ||
+      (trRes.rows[0]?.cnt || 0) > 0 ||
+      (audRes.rows[0]?.cnt || 0) > 0 ||
+      (bakRes.rows[0]?.cnt || 0) > 0;
+
+    const now = new Date().toISOString();
+    if (hasAnyPriorData) {
+      await this.pool.query(
+        `INSERT INTO tk_app_meta (key, value, updated_at) VALUES ('initial_seed_completed', 'true', $1)
+         ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = EXCLUDED.updated_at`,
+        [now]
+      );
+      return;
+    }
+
+    // Truly brand-new empty database -> seed once inside a transaction
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const r of seed.records) {
+        await client.query(
+          `INSERT INTO tk_records (id, branch, date, updated_at, data)
+           VALUES ($1,$2,$3,$4,$5) ON CONFLICT (branch, date) DO NOTHING`,
+          [r.id, r.branch, r.date, r.updatedAt || r.createdAt || now, JSON.stringify(r)]
+        );
+      }
       for (const t of seed.transfers) {
-        await this.pool.query(
+        await client.query(
           `INSERT INTO tk_transfers (id, transfer_number, date, sender_branch, receiver_branch, status, updated_at, data)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING`,
           [
@@ -579,17 +640,24 @@ class UnifiedDatabase {
           ]
         );
       }
-    }
-
-    const audRes = await this.pool.query('SELECT COUNT(*)::int AS cnt FROM tk_audit_logs');
-    if ((audRes.rows[0]?.cnt || 0) === 0 && seed.auditLogs.length > 0) {
       for (const a of seed.auditLogs) {
-        await this.pool.query(
+        await client.query(
           `INSERT INTO tk_audit_logs (id, record_id, branch, timestamp, data)
            VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING`,
           [a.id, a.recordId, a.branch, a.timestamp, JSON.stringify(a)]
         );
       }
+      await client.query(
+        `INSERT INTO tk_app_meta (key, value, updated_at) VALUES ('initial_seed_completed', 'true', $1)
+         ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = EXCLUDED.updated_at`,
+        [now]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
   }
 
@@ -770,8 +838,23 @@ class UnifiedDatabase {
   async deleteRecord(id: string): Promise<RekapRecord | null> {
     await this.init();
     if (this.pool && this.mode === 'postgresql') {
-      const res = await this.pool.query('DELETE FROM tk_records WHERE id = $1 RETURNING data', [id]);
-      return (res.rows[0]?.data as RekapRecord) || null;
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        const res = await client.query('DELETE FROM tk_records WHERE id = $1 RETURNING data', [id]);
+        await client.query(
+          `INSERT INTO tk_app_meta (key, value, updated_at) VALUES ('initial_seed_completed', 'true', $1)
+           ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = EXCLUDED.updated_at`,
+          [new Date().toISOString()]
+        );
+        await client.query('COMMIT');
+        return (res.rows[0]?.data as RekapRecord) || null;
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
     }
     const idx = this.fileDb!.records.findIndex((r) => r.id === id);
     if (idx === -1) return null;
@@ -780,30 +863,153 @@ class UnifiedDatabase {
     return deleted;
   }
 
-  async resetBranchRecords(branch?: string): Promise<{ deletedCount: number; remainingCount: number }> {
+  async deleteRecordWithAudit(
+    id: string,
+    auditFactory: (deleted: RekapRecord) => AuditLogEntry
+  ): Promise<{ deleted: RekapRecord; auditEntry: AuditLogEntry; remainingCount: number } | null> {
     await this.init();
     if (this.pool && this.mode === 'postgresql') {
-      let deletedCount = 0;
-      if (branch && branch !== 'All') {
-        const res = await this.pool.query('DELETE FROM tk_records WHERE branch = $1', [branch]);
-        deletedCount = res.rowCount || 0;
-      } else {
-        const res = await this.pool.query('DELETE FROM tk_records');
-        deletedCount = res.rowCount || 0;
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        const res = await client.query('DELETE FROM tk_records WHERE id = $1 RETURNING data', [id]);
+        const deleted = (res.rows[0]?.data as RekapRecord) || null;
+        if (!deleted) {
+          await client.query('ROLLBACK');
+          return null;
+        }
+        const auditEntry = auditFactory(deleted);
+        await client.query(
+          `INSERT INTO tk_audit_logs (id, record_id, branch, timestamp, data)
+           VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING`,
+          [auditEntry.id, auditEntry.recordId, auditEntry.branch, auditEntry.timestamp, JSON.stringify(auditEntry)]
+        );
+        await client.query(
+          `INSERT INTO tk_app_meta (key, value, updated_at) VALUES ('initial_seed_completed', 'true', $1)
+           ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = EXCLUDED.updated_at`,
+          [new Date().toISOString()]
+        );
+        const rem = await client.query('SELECT COUNT(*)::int AS cnt FROM tk_records');
+        await client.query('COMMIT');
+        return {
+          deleted,
+          auditEntry,
+          remainingCount: rem.rows[0]?.cnt || 0,
+        };
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
       }
-      const rem = await this.pool.query('SELECT COUNT(*)::int AS cnt FROM tk_records');
-      return { deletedCount, remainingCount: rem.rows[0]?.cnt || 0 };
     }
 
-    const initialCount = this.fileDb!.records.length;
-    if (branch && branch !== 'All') {
-      this.fileDb!.records = this.fileDb!.records.filter((r) => r.branch !== branch);
-    } else {
-      this.fileDb!.records = [];
+    const idx = this.fileDb!.records.findIndex((r) => r.id === id);
+    if (idx === -1) return null;
+    const [deleted] = this.fileDb!.records.splice(idx, 1);
+    const auditEntry = auditFactory(deleted);
+    this.fileDb!.auditLogs.unshift(auditEntry);
+    if (this.fileDb!.auditLogs.length > 500) {
+      this.fileDb!.auditLogs = this.fileDb!.auditLogs.slice(0, 500);
     }
     saveFileDatabase(this.fileDb!);
     return {
+      deleted,
+      auditEntry,
+      remainingCount: this.fileDb!.records.length,
+    };
+  }
+
+  async resetBranchRecords(
+    branch?: string,
+    options?: { includeTransfers?: boolean; auditEntry?: AuditLogEntry }
+  ): Promise<{ deletedCount: number; deletedTransfers: number; remainingCount: number }> {
+    await this.init();
+    const includeTransfers = Boolean(options?.includeTransfers);
+
+    if (this.pool && this.mode === 'postgresql') {
+      const client = await this.pool.connect();
+      try {
+        await client.query('BEGIN');
+        let deletedCount = 0;
+        let deletedTransfers = 0;
+
+        if (branch && branch !== 'All') {
+          const res = await client.query('DELETE FROM tk_records WHERE branch = $1', [branch]);
+          deletedCount = res.rowCount || 0;
+          if (includeTransfers) {
+            const trRes = await client.query(
+              'DELETE FROM tk_transfers WHERE sender_branch = $1 OR receiver_branch = $1',
+              [branch]
+            );
+            deletedTransfers = trRes.rowCount || 0;
+          }
+        } else {
+          const res = await client.query('DELETE FROM tk_records');
+          deletedCount = res.rowCount || 0;
+          if (includeTransfers) {
+            const trRes = await client.query('DELETE FROM tk_transfers');
+            deletedTransfers = trRes.rowCount || 0;
+          }
+        }
+
+        if (options?.auditEntry) {
+          const a = options.auditEntry;
+          await client.query(
+            `INSERT INTO tk_audit_logs (id, record_id, branch, timestamp, data)
+             VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO NOTHING`,
+            [a.id, a.recordId, a.branch, a.timestamp, JSON.stringify(a)]
+          );
+        }
+
+        await client.query(
+          `INSERT INTO tk_app_meta (key, value, updated_at) VALUES ('initial_seed_completed', 'true', $1)
+           ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = EXCLUDED.updated_at`,
+          [new Date().toISOString()]
+        );
+
+        const rem = await client.query('SELECT COUNT(*)::int AS cnt FROM tk_records');
+        await client.query('COMMIT');
+        return {
+          deletedCount,
+          deletedTransfers,
+          remainingCount: rem.rows[0]?.cnt || 0,
+        };
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    }
+
+    const initialCount = this.fileDb!.records.length;
+    const initialTransfers = this.fileDb!.transfers.length;
+    if (branch && branch !== 'All') {
+      this.fileDb!.records = this.fileDb!.records.filter((r) => r.branch !== branch);
+      if (includeTransfers) {
+        this.fileDb!.transfers = this.fileDb!.transfers.filter(
+          (t) => t.senderBranch !== branch && t.receiverBranch !== branch
+        );
+      }
+    } else {
+      this.fileDb!.records = [];
+      if (includeTransfers) {
+        this.fileDb!.transfers = [];
+      }
+    }
+
+    if (options?.auditEntry) {
+      this.fileDb!.auditLogs.unshift(options.auditEntry);
+      if (this.fileDb!.auditLogs.length > 500) {
+        this.fileDb!.auditLogs = this.fileDb!.auditLogs.slice(0, 500);
+      }
+    }
+
+    saveFileDatabase(this.fileDb!);
+    return {
       deletedCount: initialCount - this.fileDb!.records.length,
+      deletedTransfers: initialTransfers - this.fileDb!.transfers.length,
       remainingCount: this.fileDb!.records.length,
     };
   }

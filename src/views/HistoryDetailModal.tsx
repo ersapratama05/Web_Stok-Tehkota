@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { RekapRecord } from '../types';
 import { apiFetch } from '../utils/api';
-import { formatDateIndo, formatRupiah } from '../utils/calculations';
+import { formatDateIndo, formatRupiah, getJakartaTimeStr } from '../utils/calculations';
+import {
+  removeFromSyncQueue,
+  removeLocalDraft,
+  removeRecordFromLocalCache,
+} from '../utils/storage';
 import {
   exportRecordToCsv,
   exportRecordToImage,
@@ -27,7 +32,7 @@ interface HistoryDetailModalProps {
   record: RekapRecord;
   onClose: () => void;
   onEdit: (record: RekapRecord) => void;
-  onDeleteSuccess: () => void;
+  onDeleteSuccess: (deletedRecord: RekapRecord) => void;
 }
 
 export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
@@ -36,7 +41,7 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
   onEdit,
   onDeleteSuccess,
 }) => {
-  const { user } = useAuth();
+  const { user, refreshCentralData, setSyncStatus, setLastSavedTime, setSyncNotice } = useAuth();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -49,16 +54,30 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
   const handleDelete = async () => {
     setIsDeleting(true);
     setDeleteError(null);
+    setSyncStatus('saving');
     try {
       const res = await apiFetch(`/api/records/${record.id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const d = await res.json().catch(() => null);
-        throw new Error(d?.error || 'Gagal menghapus rekapan dari server');
+      const resJson = await res.json().catch(() => null);
+      if (!res.ok || !resJson?.success) {
+        throw new Error(resJson?.error || 'Gagal menghapus rekapan dari database server');
       }
-      onDeleteSuccess();
+
+      // Only clear caches, drafts, and offline queue after database confirms permanent deletion
+      removeRecordFromLocalCache(record.id, record.branch, record.date);
+      removeLocalDraft(record.branch, record.date);
+      removeFromSyncQueue(record.id, record.branch, record.date);
+
+      setSyncStatus('saved');
+      setLastSavedTime(`${getJakartaTimeStr()} WIB`);
+      setSyncNotice(`Rekapan Cabang ${record.branch} (${record.date}) dihapus permanen dari database.`);
+      setTimeout(() => setSyncNotice(null), 5000);
+
+      await refreshCentralData();
+      onDeleteSuccess(record);
       onClose();
     } catch (err: any) {
-      setDeleteError(err.message || 'Gagal menghapus');
+      setSyncStatus('error');
+      setDeleteError(err.message || 'Gagal menghapus rekapan dari server');
       setIsDeleting(false);
     }
   };

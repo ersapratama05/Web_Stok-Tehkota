@@ -2,8 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Branch, DashboardStats, OwnerSummaryData, RekapRecord } from '../types';
 import { apiFetch } from '../utils/api';
-import { formatRupiah, formatDateIndo, getCurrentMonthStr, getTodayDateStr, getYesterdayDateStr } from '../utils/calculations';
-import { clearBranchDrafts, computeLocalDashboardStats, getCachedRecords, setCachedRecords, saveRecordToLocal } from '../utils/storage';
+import { formatRupiah, formatDateIndo, getCurrentMonthStr, getJakartaTimeStr, getTodayDateStr, getYesterdayDateStr } from '../utils/calculations';
+import {
+  clearBranchCacheAndQueue,
+  computeLocalDashboardStats,
+  removeRecordFromLocalCache,
+  saveRecordToLocal,
+} from '../utils/storage';
 import {
   TrendingUp,
   Wallet,
@@ -39,7 +44,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToPengiriman,
   onViewRecordDetail,
 }) => {
-  const { user, activeBranch, setActiveBranch } = useAuth();
+  const { user, activeBranch, setActiveBranch, refreshCentralData, setSyncStatus, setLastSavedTime } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [ownerSummary, setOwnerSummary] = useState<OwnerSummaryData | null>(null);
   const [summaryPeriod, setSummaryPeriod] = useState<'today' | 'yesterday' | '7days' | '30days' | 'month' | 'custom'>('month');
@@ -49,7 +54,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState<boolean>(false);
-  const [resetTargetBranch, setResetTargetBranch] = useState<Branch | null>(null);
+  const [resetTargetBranch, setResetTargetBranch] = useState<Branch | 'All' | null>(null);
+  const [resetIncludeTransfers, setResetIncludeTransfers] = useState<boolean>(false);
   const [resetMessage, setResetMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const fetchDashboardData = useCallback(async () => {
@@ -62,7 +68,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       if (branchRes.ok && contentType.includes('application/json')) {
         const data = await branchRes.json();
         setStats(data);
-        if (data.recentRekapan && Array.isArray(data.recentRekapan)) {
+        if (data.rekapCount === 0 && (!data.recentRekapan || data.recentRekapan.length === 0)) {
+          removeRecordFromLocalCache(undefined, activeBranch, undefined);
+        } else if (data.recentRekapan && Array.isArray(data.recentRekapan)) {
           for (const rec of data.recentRekapan) {
             saveRecordToLocal(rec);
           }
@@ -101,33 +109,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const executeResetBranch = async () => {
     if (!resetTargetBranch) return;
     const branchToReset = resetTargetBranch;
-    setResetTargetBranch(null);
+    const includeTransfers = resetIncludeTransfers;
 
     try {
       setIsResetting(true);
+      setSyncStatus('saving');
       const res = await apiFetch('/api/records/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branch: branchToReset }),
+        body: JSON.stringify({ branch: branchToReset, includeTransfers }),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        setResetMessage({ text: data?.error || 'Gagal mereset rekapan.', type: 'error' });
+      if (!res.ok || !data?.success) {
+        setSyncStatus('error');
+        setResetMessage({
+          text: data?.error || 'Gagal menghapus rekapan di database server.',
+          type: 'error',
+        });
+        setResetTargetBranch(null);
         return;
       }
 
-      clearBranchDrafts(branchToReset);
-      const remaining = getCachedRecords().filter((r) => r.branch !== branchToReset);
-      setCachedRecords(remaining);
+      clearBranchCacheAndQueue(branchToReset);
+      setSyncStatus('saved');
+      setLastSavedTime(`${getJakartaTimeStr()} WIB`);
+      setResetTargetBranch(null);
+      setResetIncludeTransfers(false);
 
       setResetMessage({
-        text: data?.message || `Rekapan Cabang ${branchToReset} berhasil di-reset.`,
+        text:
+          data?.message ||
+          `Data operasional ${branchToReset === 'All' ? 'Sompok & Suyudono' : `Cabang ${branchToReset}`} berhasil dihapus permanen.`,
         type: 'success',
       });
+      await refreshCentralData();
       await fetchDashboardData();
-      setTimeout(() => setResetMessage(null), 5000);
+      window.dispatchEvent(
+        new CustomEvent('tehkota:sync-record', {
+          detail: { event: 'batch_sync', branch: branchToReset },
+        })
+      );
+      setTimeout(() => setResetMessage(null), 6000);
     } catch (err: any) {
-      setResetMessage({ text: 'Gagal mereset rekapan: ' + (err.message || 'Koneksi error'), type: 'error' });
+      setSyncStatus('error');
+      setResetMessage({
+        text: 'Gagal menghapus rekapan di server: ' + (err.message || 'Koneksi error'),
+        type: 'error',
+      });
+      setResetTargetBranch(null);
     } finally {
       setIsResetting(false);
     }
@@ -677,17 +706,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               Riwayat rekapan terbaru di Cabang {activeBranch}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {user?.role === 'admin' && (
-              <button
-                onClick={() => setResetTargetBranch(activeBranch)}
-                disabled={isResetting}
-                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition"
-                title={`Reset rekapan Cabang ${activeBranch} (otomatis membuat backup dahulu)`}
-              >
-                <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">Reset {activeBranch}</span>
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    setResetIncludeTransfers(false);
+                    setResetTargetBranch(activeBranch);
+                  }}
+                  disabled={isResetting}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition"
+                  title={`Hapus rekapan Cabang ${activeBranch} (otomatis membuat backup dahulu)`}
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Reset {activeBranch}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setResetIncludeTransfers(false);
+                    setResetTargetBranch('All');
+                  }}
+                  disabled={isResetting}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-white bg-rose-700 hover:bg-rose-800 rounded-lg shadow-xs transition"
+                  title="Hapus seluruh rekapan operasional Sompok & Suyudono (akun & produk tetap aman)"
+                >
+                  <span>Reset Semua</span>
+                </button>
+              </>
             )}
             <button
               onClick={fetchDashboardData}
@@ -783,30 +828,73 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* In-app Owner Reset Confirmation Modal */}
       {resetTargetBranch && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-white rounded-2xl p-5 shadow-2xl text-center space-y-3">
+          <div className="w-full max-w-md bg-white rounded-2xl p-5 shadow-2xl space-y-3.5">
             <div className="w-11 h-11 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-slate-900">
-              Reset Seluruh Rekapan {resetTargetBranch}?
+            <h3 className="text-base font-bold text-slate-900 text-center">
+              {resetTargetBranch === 'All'
+                ? 'Hapus Seluruh Rekapan Sompok & Suyudono?'
+                : `Hapus Seluruh Rekapan Cabang ${resetTargetBranch}?`}
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Sistem otomatis membuat <strong>Snapshot Backup Keamanan</strong> terlebih dahulu sebelum mengosongkan rekapan Cabang <strong>{resetTargetBranch}</strong>.
+
+            {/* Scope Picker */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-bold text-slate-600 uppercase block">
+                Pilih Cakupan Data Operasional:
+              </span>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(['Sompok', 'Suyudono', 'All'] as const).map((scope) => (
+                  <button
+                    key={scope}
+                    type="button"
+                    disabled={isResetting}
+                    onClick={() => setResetTargetBranch(scope)}
+                    className={`py-2 px-2 rounded-xl text-xs font-bold border transition ${
+                      resetTargetBranch === scope
+                        ? 'bg-rose-700 text-white border-rose-700 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {scope === 'All' ? 'Semua Cabang' : scope}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <label className="flex items-start gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={resetIncludeTransfers}
+                disabled={isResetting}
+                onChange={(e) => setResetIncludeTransfers(e.target.checked)}
+                className="mt-0.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+              />
+              <span>
+                Ikut hapus catatan <strong>Pengiriman Barang Antarcabang</strong> terkait cakupan ini
+              </span>
+            </label>
+
+            <p className="text-[11px] text-slate-600 leading-relaxed bg-emerald-50 border border-emerald-200 rounded-xl p-2.5">
+              Sistem otomatis membuat <strong>Snapshot Backup Keamanan</strong> dahulu. <strong>Akun pengguna, kata sandi, daftar produk, harga, dan pengaturan aplikasi tidak akan terhapus.</strong>
             </p>
-            <div className="flex items-center gap-2 pt-2">
+
+            <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"
+                disabled={isResetting}
                 onClick={() => setResetTargetBranch(null)}
-                className="flex-1 py-2 text-xs font-semibold rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50"
+                className="flex-1 py-2.5 text-xs font-semibold rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 Batal
               </button>
               <button
                 type="button"
+                disabled={isResetting}
                 onClick={executeResetBranch}
-                className="flex-1 py-2 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700"
+                className="flex-1 py-2.5 text-xs font-bold rounded-xl bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
               >
-                Ya, Reset Sekarang
+                {isResetting ? 'Menghapus di Server...' : 'Ya, Hapus Permanen'}
               </button>
             </div>
           </div>
