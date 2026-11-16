@@ -1,6 +1,6 @@
 {
   "initialized": true,
-  "lastMutationAt": "2026-11-16T11:12:51.853Z",
+  "lastMutationAt": "2026-11-16T11:39:41.002Z",
   "users": [
     {
       "id": "usr_sompok",
@@ -33,9 +33,403 @@
       "active": true
     }
   ],
-  "records": [],
-  "transfers": [],
+  "records": [
+    {
+      "branch": "Suyudono",
+      "date": "2026-11-29",
+      "status": "saved",
+      "stocks": [],
+      "expenses": [
+        {
+          "id": "s1",
+          "name": "Es",
+          "amount": 25000
+        }
+      ],
+      "qris": 175000,
+      "omsetAkhir": 400000,
+      "id": "rek_suyudono_20261129",
+      "timeStr": "18.19.22",
+      "createdAt": "2026-11-16T11:19:22.111Z",
+      "updatedAt": "2026-11-16T11:19:22.636Z",
+      "createdBy": "Kasir Suyudono (Kasir Suyudono)",
+      "lastEditedBy": "Kasir Suyudono",
+      "lastEditedAt": "2026-11-16T11:19:22.636Z",
+      "revisionCount": 3,
+      "totalOmset": 600000,
+      "totalPengeluaran": 25000,
+      "auditLogs": [
+        {
+          "id": "audit_1794827962636_qv92d",
+          "recordId": "rek_suyudono_20261129",
+          "entityType": "rekap",
+          "branch": "Suyudono",
+          "date": "2026-11-29",
+          "editedBy": "Kasir Suyudono",
+          "timestamp": "2026-11-16T11:19:22.636Z",
+          "note": "Sinkronisasi antrean offline Cabang Suyudono",
+          "changes": [
+            {
+              "field": "offline_sync",
+              "label": "Sync Offline",
+              "before": "Data sebelumnya",
+              "after": "Omset Rp 600.000"
+            }
+          ]
+        },
+        {
+          "id": "audit_1794827962124_j140h",
+          "recordId": "rek_suyudono_20261129",
+          "entityType": "transfer",
+          "branch": "Suyudono",
+          "date": "2026-11-29",
+          "editedBy": "Owner Teh Kota",
+          "timestamp": "2026-11-16T11:19:22.124Z",
+          "note": "Pembatalan KRM-261129-001",
+          "changes": [
+            {
+              "field": "stock_CUP",
+              "label": "Stok CUP (KRM-261129-001)",
+              "before": "IN:100 OUT:0 ST:100",
+              "after": "IN:0 OUT:0 ST:0"
+            }
+          ]
+        },
+        {
+          "id": "audit_1794827962112_1nzlk",
+          "recordId": "rek_suyudono_20261129",
+          "entityType": "transfer",
+          "branch": "Suyudono",
+          "date": "2026-11-29",
+          "editedBy": "Kasir Suyudono (Kasir Suyudono)",
+          "timestamp": "2026-11-16T11:19:22.111Z",
+          "note": "Penerimaan Masuk KRM-261129-001",
+          "changes": [
+            {
+              "field": "stock_CUP",
+              "label": "Stok CUP (KRM-261129-001)",
+              "before": "IN:0 OUT:0 ST:0",
+              "after": "IN:100 OUT:0 ST:100"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "transfers": [
+    {
+      "id": "tr_1794827962097_lvtgw",
+      "transferNumber": "KRM-261129-001",
+      "date": "2026-11-29",
+      "senderBranch": "Sompok",
+      "receiverBranch": "Suyudono",
+      "items": [
+        {
+          "id": "it1",
+          "itemName": "CUP",
+          "isCustom": false,
+          "unit": "slop",
+          "sentQty": 2,
+          "actualQty": 2,
+          "discrepancy": 0
+        }
+      ],
+      "notes": "",
+      "senderName": "Kasir Sompok",
+      "status": "Dibatalkan",
+      "createdBy": "Kasir Sompok",
+      "createdAt": "2026-11-16T11:19:22.097Z",
+      "updatedAt": "2026-11-16T11:19:22.125Z",
+      "stockAppliedToSender": false,
+      "stockAppliedToReceiver": false,
+      "auditLogs": [
+        {
+          "id": "audit_1794827962125_on5h",
+          "recordId": "KRM-261129-001",
+          "entityType": "transfer",
+          "branch": "Sompok",
+          "date": "2026-11-29",
+          "editedBy": "Owner Teh Kota",
+          "timestamp": "2026-11-16T11:19:22.125Z",
+          "note": "Pembatalan pengiriman: Uji pembatalan",
+          "changes": [
+            {
+              "field": "status",
+              "label": "Status Pengiriman",
+              "before": "Diterima",
+              "after": "Dibatalkan (stok dikembalikan)"
+            }
+          ]
+        },
+        {
+          "id": "audit_1794827962114_ghev",
+          "recordId": "KRM-261129-001",
+          "entityType": "transfer",
+          "branch": "Suyudono",
+          "date": "2026-11-29",
+          "editedBy": "Kasir Suyudono (Kasir Suyudono)",
+          "timestamp": "2026-11-16T11:19:22.110Z",
+          "note": "Konfirmasi penerimaan status: Diterima",
+          "changes": [
+            {
+              "field": "CUP",
+              "label": "CUP",
+              "before": "Kirim 2 slop",
+              "after": "Terima 2 slop"
+            }
+          ]
+        },
+        {
+          "id": "audit_1794827962097_9mem",
+          "recordId": "KRM-261129-001",
+          "entityType": "transfer",
+          "branch": "Sompok",
+          "date": "2026-11-29",
+          "editedBy": "Kasir Sompok",
+          "timestamp": "2026-11-16T11:19:22.097Z",
+          "note": "Pengiriman dibuat (Sompok -> Suyudono)",
+          "changes": [
+            {
+              "field": "CUP",
+              "label": "CUP",
+              "before": "0",
+              "after": "Dikirim 2 slop"
+            }
+          ]
+        }
+      ],
+      "receiverName": "Kasir Suyudono",
+      "confirmedBy": "Kasir Suyudono",
+      "confirmedAt": "2026-11-16T11:19:22.110Z",
+      "confirmationNote": "",
+      "cancelledBy": "Owner Teh Kota",
+      "cancelledAt": "2026-11-16T11:19:22.125Z",
+      "cancelReason": "Uji pembatalan"
+    }
+  ],
   "auditLogs": [
+    {
+      "id": "audit_1794827962674_u8kty",
+      "recordId": "rek_sompok_20261129",
+      "entityType": "rekap",
+      "branch": "Sompok",
+      "date": "2026-11-29",
+      "editedBy": "Kasir Sompok",
+      "timestamp": "2026-11-16T11:19:22.673Z",
+      "note": "Menghapus permanen rekapan Cabang Sompok tgl 2026-11-29",
+      "changes": [
+        {
+          "field": "delete",
+          "label": "Hapus Rekapan",
+          "before": "Omset Rp 1.350.000",
+          "after": "Dihapus Permanen"
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827962636_qv92d",
+      "recordId": "rek_suyudono_20261129",
+      "entityType": "rekap",
+      "branch": "Suyudono",
+      "date": "2026-11-29",
+      "editedBy": "Kasir Suyudono",
+      "timestamp": "2026-11-16T11:19:22.636Z",
+      "note": "Sinkronisasi antrean offline Cabang Suyudono",
+      "changes": [
+        {
+          "field": "offline_sync",
+          "label": "Sync Offline",
+          "before": "Data sebelumnya",
+          "after": "Omset Rp 600.000"
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827962124_j140h",
+      "recordId": "rek_suyudono_20261129",
+      "entityType": "transfer",
+      "branch": "Suyudono",
+      "date": "2026-11-29",
+      "editedBy": "Owner Teh Kota",
+      "timestamp": "2026-11-16T11:19:22.124Z",
+      "note": "Pembatalan KRM-261129-001",
+      "changes": [
+        {
+          "field": "stock_CUP",
+          "label": "Stok CUP (KRM-261129-001)",
+          "before": "IN:100 OUT:0 ST:100",
+          "after": "IN:0 OUT:0 ST:0"
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827962122_vdxss",
+      "recordId": "rek_sompok_20261129",
+      "entityType": "transfer",
+      "branch": "Sompok",
+      "date": "2026-11-29",
+      "editedBy": "Owner Teh Kota",
+      "timestamp": "2026-11-16T11:19:22.122Z",
+      "note": "Pembatalan KRM-261129-001",
+      "changes": [
+        {
+          "field": "stock_CUP",
+          "label": "Stok CUP (KRM-261129-001)",
+          "before": "IN:500 OUT:250 ST:450",
+          "after": "IN:500 OUT:150 ST:550"
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827962112_1nzlk",
+      "recordId": "rek_suyudono_20261129",
+      "entityType": "transfer",
+      "branch": "Suyudono",
+      "date": "2026-11-29",
+      "editedBy": "Kasir Suyudono (Kasir Suyudono)",
+      "timestamp": "2026-11-16T11:19:22.111Z",
+      "note": "Penerimaan Masuk KRM-261129-001",
+      "changes": [
+        {
+          "field": "stock_CUP",
+          "label": "Stok CUP (KRM-261129-001)",
+          "before": "IN:0 OUT:0 ST:0",
+          "after": "IN:100 OUT:0 ST:100"
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827962098_4nc3l",
+      "recordId": "rek_sompok_20261129",
+      "entityType": "transfer",
+      "branch": "Sompok",
+      "date": "2026-11-29",
+      "editedBy": "Kasir Sompok",
+      "timestamp": "2026-11-16T11:19:22.098Z",
+      "note": "Pengiriman Keluar KRM-261129-001",
+      "changes": [
+        {
+          "field": "stock_CUP",
+          "label": "Stok CUP (KRM-261129-001)",
+          "before": "IN:500 OUT:150 ST:550",
+          "after": "IN:500 OUT:250 ST:450"
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827962026_yx682",
+      "recordId": "rek_sompok_20261129",
+      "entityType": "rekap",
+      "branch": "Sompok",
+      "date": "2026-11-29",
+      "editedBy": "Owner Teh Kota",
+      "timestamp": "2026-11-16T11:19:22.026Z",
+      "note": "Perubahan data rekapan dari perangkat",
+      "changes": [
+        {
+          "field": "totalOmset",
+          "label": "Omset Kotor",
+          "before": 1300000,
+          "after": 1350000
+        },
+        {
+          "field": "omsetAkhir",
+          "label": "Omset Bersih",
+          "before": 850000,
+          "after": 900000
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827961976_ywnd7",
+      "recordId": "rek_sompok_20261129",
+      "entityType": "rekap",
+      "branch": "Sompok",
+      "date": "2026-11-29",
+      "editedBy": "Kasir Sompok",
+      "timestamp": "2026-11-16T11:19:21.976Z",
+      "note": "Membuat rekapan baru Cabang Sompok",
+      "changes": [
+        {
+          "field": "create",
+          "label": "Input Baru",
+          "before": "-",
+          "after": "Omset Rp 1.300.000 • Status saved"
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827769452_z9hx0",
+      "recordId": "rek_suyudono_20261128",
+      "entityType": "rekap",
+      "branch": "Suyudono",
+      "date": "2026-11-28",
+      "editedBy": "Kasir Suyudono",
+      "timestamp": "2026-11-16T11:16:09.452Z",
+      "note": "Menghapus permanen rekapan Cabang Suyudono tgl 2026-11-28",
+      "changes": [
+        {
+          "field": "delete",
+          "label": "Hapus Rekapan",
+          "before": "Omset Rp 1.000.000",
+          "after": "Dihapus Permanen"
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827759682_qrtdd",
+      "recordId": "rek_sompok_20261128",
+      "entityType": "rekap",
+      "branch": "Sompok",
+      "date": "2026-11-28",
+      "editedBy": "Kasir Sompok",
+      "timestamp": "2026-11-16T11:15:59.681Z",
+      "note": "Menghapus permanen rekapan Cabang Sompok tgl 2026-11-28",
+      "changes": [
+        {
+          "field": "delete",
+          "label": "Hapus Rekapan",
+          "before": "Omset Rp 1.500.000",
+          "after": "Dihapus Permanen"
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827583940_q05ih",
+      "recordId": "rek_suyudono_20261128",
+      "entityType": "rekap",
+      "branch": "Suyudono",
+      "date": "2026-11-28",
+      "editedBy": "Kasir Suyudono",
+      "timestamp": "2026-11-16T11:13:03.940Z",
+      "note": "Membuat rekapan baru Cabang Suyudono",
+      "changes": [
+        {
+          "field": "create",
+          "label": "Input Baru",
+          "before": "-",
+          "after": "Omset Rp 1.000.000 • Status saved"
+        }
+      ]
+    },
+    {
+      "id": "audit_1794827583906_xgvds",
+      "recordId": "rek_sompok_20261128",
+      "entityType": "rekap",
+      "branch": "Sompok",
+      "date": "2026-11-28",
+      "editedBy": "Kasir Sompok",
+      "timestamp": "2026-11-16T11:13:03.906Z",
+      "note": "Membuat rekapan baru Cabang Sompok",
+      "changes": [
+        {
+          "field": "create",
+          "label": "Input Baru",
+          "before": "-",
+          "after": "Omset Rp 1.500.000 • Status saved"
+        }
+      ]
+    },
     {
       "id": "audit_1794826308444_h7dy7",
       "recordId": "reset_All",

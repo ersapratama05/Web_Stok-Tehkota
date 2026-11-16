@@ -1654,7 +1654,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
 
             <div className="text-[11px] text-slate-600 space-y-1">
               <div>
-                Data di server saat ini: Omset <strong>{formatRupiah(conflictModal.serverRecord.totalOmset)}</strong> • Diperbarui oleh <strong>{conflictModal.serverRecord.lastEditedBy || conflictModal.serverRecord.createdBy}</strong>
+                Data di server saat ini: Omset <strong>{formatRupiah(calculateOmsetKotor(conflictModal.serverRecord.totalPengeluaran || 0, conflictModal.serverRecord.qris || 0, conflictModal.serverRecord.omsetAkhir || 0))}</strong> • Diperbarui oleh <strong>{conflictModal.serverRecord.lastEditedBy || conflictModal.serverRecord.createdBy}</strong>
               </div>
             </div>
 

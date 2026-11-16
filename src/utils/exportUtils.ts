@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { AiAnalysisResult, BranchTransfer, RekapRecord } from '../types';
-import { formatDateIndo, formatRupiah, getTodayDateStr } from './calculations';
+import { calculateOmsetKotor, formatDateIndo, formatRupiah, getTodayDateStr } from './calculations';
 
 const OFFICIAL_LOGO_URL = '/assets/aistudio/image_764559de.png';
 let cachedLogoImage: HTMLImageElement | null = null;
@@ -82,7 +82,7 @@ export function exportRecordToCsv(record: RekapRecord): void {
   lines.push('');
 
   lines.push('RINGKASAN KEUANGAN OUTLET');
-  lines.push(`Total Omset (Kotor);Rp ${record.totalOmset}`);
+  lines.push(`Total Omset (Kotor);Rp ${calculateOmsetKotor(record.totalPengeluaran || 0, record.qris || 0, record.omsetAkhir || 0)}`);
   lines.push(`Total Pengeluaran;Rp ${record.totalPengeluaran}`);
   lines.push(`QRIS (Non-Tunai);Rp ${record.qris}`);
   lines.push(`Omset Akhir (Bersih);Rp ${record.omsetAkhir}`);
@@ -485,7 +485,7 @@ export function renderRecordCanvas(
   rightY += headerRowHeight;
 
   const finRows = [
-    { label: 'TOTAL OMSET (KOTOR)', val: formatRupiah(record.totalOmset), color: '#0f172a', bg: '#ffffff' },
+    { label: 'TOTAL OMSET (KOTOR)', val: formatRupiah(calculateOmsetKotor(record.totalPengeluaran || 0, record.qris || 0, record.omsetAkhir || 0)), color: '#0f172a', bg: '#ffffff' },
     { label: 'TOTAL PENGELUARAN', val: formatRupiah(record.totalPengeluaran), color: '#dc2626', bg: '#fef2f2' },
     { label: 'QRIS (NON-TUNAI)', val: formatRupiah(record.qris), color: '#0284c7', bg: '#f0f9ff' },
     { label: 'OMSET AKHIR (SETORAN BERSIH)', val: formatRupiah(record.omsetAkhir), color: '#047857', bg: '#ecfdf5' },
