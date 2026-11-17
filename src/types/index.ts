@@ -43,7 +43,7 @@ export interface StockItemRow {
   inQty: number; // Barang Masuk (IN)
   outQty: number; // Barang Keluar (OUT)
   st: number; // Stok Akhir: SA + IN - OUT
-  so: number; // Stok Opname (manual or calculated for CUP)
+  so: number | null; // Stok Opname fisik aktual (null jika belum diisi)
   notes?: string;
   cupDetail?: CupDetail; // only for CUP item
 }

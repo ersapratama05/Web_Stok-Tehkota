@@ -16,6 +16,7 @@ import {
   getJakartaTimeStr,
   getTodayDateStr,
   getYesterdayDateStr,
+  normalizeSoValue,
   resolvePreviousGulaCarryover,
   validateGulaDetail,
 } from '../src/utils/calculations';
@@ -988,7 +989,7 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
           inQty: Math.max(0, Number(s.inQty) || 0),
           outQty: Math.max(0, Number(s.outQty) || 0),
           st: calculateStokAkhir(s.sa, s.inQty, s.outQty),
-          so: Number(s.so) || 0,
+          so: normalizeSoValue(s.so),
         }))
       : [];
 
@@ -1059,13 +1060,16 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
           const oldS = targetExisting.stocks.find((s) => s.name === newS.name);
           if (
             oldS &&
-            (oldS.st !== newS.st || oldS.so !== newS.so || oldS.inQty !== newS.inQty || oldS.outQty !== newS.outQty)
+            (oldS.st !== newS.st ||
+              (oldS.so ?? null) !== (newS.so ?? null) ||
+              oldS.inQty !== newS.inQty ||
+              oldS.outQty !== newS.outQty)
           ) {
             changes.push({
               field: `stock_${newS.name}`,
               label: `Stok ${newS.name}`,
-              before: `IN:${oldS.inQty} OUT:${oldS.outQty} ST:${oldS.st} SO:${oldS.so}`,
-              after: `IN:${newS.inQty} OUT:${newS.outQty} ST:${newS.st} SO:${newS.so}`,
+              before: `IN:${oldS.inQty} OUT:${oldS.outQty} ST:${oldS.st} SO:${oldS.so ?? '-'}`,
+              after: `IN:${newS.inQty} OUT:${newS.outQty} ST:${newS.st} SO:${newS.so ?? '-'}`,
             });
           }
         }
@@ -2019,7 +2023,7 @@ app.post('/api/ai/analyze', requireAuth, async (req: AuthedRequest, res) => {
       const topOut = [...r.stocks]
         .sort((a, b) => b.outQty - a.outQty)
         .slice(0, 5)
-        .map((i) => `${i.name}: OUT ${i.outQty} (${i.unit}), ST ${i.st}, SO ${i.so}`);
+        .map((i) => `${i.name}: OUT ${i.outQty} (${i.unit}), ST ${i.st}, SO ${i.so ?? '-'}`);
 
       const cup = r.stocks.find((s) => s.name === 'CUP');
       return {
@@ -2033,7 +2037,7 @@ app.post('/api/ai/analyze', requireAuth, async (req: AuthedRequest, res) => {
         habisGulaKg: r.gulaDetail?.habisGula || 0,
         cupSold: cup?.outQty || 0,
         cupRusak: cup?.cupDetail?.rusakPcs || 0,
-        cupSO: cup?.so || 0,
+        cupSO: cup?.so ?? null,
         topOutItems: topOut,
         expensesList: r.expenses.map((e) => `${e.name}: Rp ${e.amount}`),
       };
@@ -2193,7 +2197,7 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
             inQty: Math.max(0, Number(s.inQty) || 0),
             outQty: Math.max(0, Number(s.outQty) || 0),
             st: calculateStokAkhir(s.sa, s.inQty, s.outQty),
-            so: Number(s.so) || 0,
+            so: normalizeSoValue(s.so),
           }))
         : [];
       const totalPengeluaran = calculateTotalPengeluaran(rec.expenses || []);

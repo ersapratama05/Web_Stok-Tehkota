@@ -10,9 +10,11 @@ import {
   calculateOmsetKotor,
   calculateStokSelisih,
   formatNumberId,
+  normalizeSoValue,
   parseRupiahInput,
   resolvePreviousGulaCarryover,
 } from './calculations';
+import { createInitialStockRows } from './itemsList';
 
 test('Rumus ST = SA + IN - OUT', () => {
   // SA: 100, IN: 50, OUT: 30 -> ST: 120
@@ -96,12 +98,51 @@ test('Rumus OMZET KOTOR = PENGELUARAN + QRIS + OMZET BERSIH (tanpa penghitungan 
   assert.equal(calculateOmsetKotor(50000, 0, 500000), 550000);
 });
 
-test('Selisih Stok SO - ST', () => {
+test('Selisih Stok SO - ST (SO kosong tidak dianggap 0)', () => {
   // ST Buku = 120, Fisik SO = 118 -> -2 (hilang 2)
   assert.equal(calculateStokSelisih(120, 118), -2);
 
   // ST Buku = 50, Fisik SO = 55 -> +5 (lebih 5)
   assert.equal(calculateStokSelisih(50, 55), 5);
+
+  // SO masih kosong (null/undefined/'') -> selisih wajib null, BUKAN 0 - ST
+  assert.equal(calculateStokSelisih(120, null), null);
+  assert.equal(calculateStokSelisih(120, undefined), null);
+  assert.equal(calculateStokSelisih(120, ''), null);
+
+  // Jika kasir benar-benar mengisi angka 0 saat stok fisik habis -> selisih = -120
+  assert.equal(calculateStokSelisih(120, 0), -120);
+  assert.equal(normalizeSoValue(''), null);
+  assert.equal(normalizeSoValue(null), null);
+  assert.equal(normalizeSoValue(0), 0);
+  assert.equal(normalizeSoValue('25'), 25);
+});
+
+test('createInitialStockRows tidak menyalin SO hari sebelumnya (SO wajib null & CUP cupDetail kosong)', () => {
+  const prevStMap = {
+    CUP: 175,
+    LECI: 25,
+    'GULA PASIR': 12,
+  };
+  const fresh = createInitialStockRows(prevStMap);
+  const cup = fresh.find((r) => r.name === 'CUP');
+  const leci = fresh.find((r) => r.name === 'LECI');
+  const gula = fresh.find((r) => r.name === 'GULA PASIR');
+
+  // SA dan ST awal tetap mengambil ST hari sebelumnya
+  assert.equal(cup?.sa, 175);
+  assert.equal(cup?.st, 175);
+  // SO dan cupDetail wajib kosong (tidak menyalin SO kemarin / SA)
+  assert.equal(cup?.so, null);
+  assert.equal(cup?.cupDetail, undefined);
+
+  assert.equal(leci?.sa, 25);
+  assert.equal(leci?.st, 25);
+  assert.equal(leci?.so, null);
+
+  assert.equal(gula?.sa, 12);
+  assert.equal(gula?.st, 12);
+  assert.equal(gula?.so, null);
 });
 
 test('Parsing dan format Rupiah dengan pemisah ribuan titik', () => {

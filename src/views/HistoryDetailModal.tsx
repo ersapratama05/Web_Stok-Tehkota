@@ -305,7 +305,7 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
                           {item.st}
                         </td>
                         <td className="py-1.5 px-2 text-right font-mono font-bold text-slate-900 bg-emerald-50/50 tabular-nums">
-                          {item.so}
+                          {item.so !== null && item.so !== undefined ? item.so : '-'}
                         </td>
                       </tr>
                     );

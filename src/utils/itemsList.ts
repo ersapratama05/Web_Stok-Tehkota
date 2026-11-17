@@ -86,20 +86,8 @@ export function createInitialStockRows(previousStMap?: Record<string, number>): 
       inQty: 0,
       outQty: 0,
       st: sa, // SA + 0 - 0 = sa
-      so: sa,
+      so: null, // SO wajib kosong pada rekapan baru sampai kasir menghitung fisik
     };
-
-    if (item.name === 'CUP') {
-      const positiveSa = Math.max(0, sa);
-      const slops = Math.floor(positiveSa / 50);
-      const remainingPcs = positiveSa % 50;
-      row.cupDetail = {
-        slop: slops,
-        pcs: remainingPcs,
-        rusakPcs: 0,
-        calculatedSo: positiveSa,
-      };
-    }
 
     return row;
   });

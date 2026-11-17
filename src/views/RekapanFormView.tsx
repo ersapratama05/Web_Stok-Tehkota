@@ -390,12 +390,27 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   }, [activeBranch, date, loadDataForBranchAndDate]);
 
   // Handle stock value changes
-  const handleStockChange = (itemName: string, field: 'inQty' | 'outQty' | 'so', value: number) => {
+  const handleStockChange = (
+    itemName: string,
+    field: 'inQty' | 'outQty' | 'so',
+    value: string | number | null
+  ) => {
     setStocks((prev) =>
       prev.map((item) => {
         if (item.name !== itemName) return item;
 
         const updated = { ...item };
+
+        if (field === 'so') {
+          if (value === '' || value === null || value === undefined) {
+            updated.so = null;
+          } else {
+            const num = Number(value);
+            updated.so = Number.isFinite(num) ? Math.max(0, num) : null;
+          }
+          return updated;
+        }
+
         const safeVal = Math.max(0, Number(value) || 0);
 
         if (field === 'inQty') {
@@ -404,8 +419,6 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         } else if (field === 'outQty') {
           updated.outQty = safeVal;
           updated.st = calculateStokAkhir(updated.sa, updated.inQty, updated.outQty);
-        } else if (field === 'so') {
-          updated.so = safeVal;
         }
 
         return updated;
@@ -1148,19 +1161,21 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                           <div
                             onClick={() => setIsCupModalOpen(true)}
                             className="w-full px-2 py-1.5 text-right font-mono font-bold text-emerald-900 bg-emerald-100/60 hover:bg-emerald-200 rounded-lg cursor-pointer tabular-nums flex items-center justify-between"
-                            title="Klik untuk ubah rincian slop/pcs"
+                            title="Klik untuk mengisi/ubah rincian slop/pcs"
                           >
-                            <span className="text-[10px] text-emerald-700 font-sans">edit</span>
-                            <span>{row.so}</span>
+                            <span className="text-[10px] text-emerald-700 font-sans">
+                              {row.so !== null && row.so !== undefined ? 'edit' : 'isi'}
+                            </span>
+                            <span>{row.so !== null && row.so !== undefined ? row.so : '-'}</span>
                           </div>
                         ) : (
                           <input
                             type="number"
                             min="0"
                             step="1"
-                            value={row.so === 0 ? '' : row.so}
-                            onChange={(e) => handleStockChange(row.name, 'so', Number(e.target.value))}
-                            placeholder="0"
+                            value={row.so === null || row.so === undefined ? '' : row.so}
+                            onChange={(e) => handleStockChange(row.name, 'so', e.target.value)}
+                            placeholder="-"
                             className="w-full px-2 py-1.5 text-right font-mono font-semibold rounded-lg border border-emerald-200 focus:ring-1 focus:ring-emerald-600 outline-none bg-white tabular-nums hover:border-emerald-300 text-emerald-950"
                           />
                         )}

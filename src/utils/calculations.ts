@@ -220,12 +220,29 @@ export function calculateOmsetAkhir(totalOmset: number, totalPengeluaran: number
 }
 
 /**
- * Selisih SO vs ST (Stok Opname - Stok Akhir Buku)
+ * Normalisasi nilai SO (Stok Opname):
+ * - Kosong (null / undefined / '') tetap null agar tidak dianggap 0 sebelum kasir mengisi stok fisik.
+ * - Angka valid >= 0 dipertahankan (termasuk 0 jika kasir memang mengisi 0).
  */
-export function calculateStokSelisih(st: number, so: number): number {
+export function normalizeSoValue(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const num = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(num)) return null;
+  return Math.max(0, Math.round(num * 100) / 100);
+}
+
+/**
+ * Selisih SO vs ST (Stok Opname - Stok Akhir Buku)
+ * Hanya dihitung setelah SO diisi; mengembalikan null jika SO masih kosong.
+ */
+export function calculateStokSelisih(
+  st: number,
+  so: number | string | null | undefined
+): number | null {
+  const normalizedSo = normalizeSoValue(so);
+  if (normalizedSo === null) return null;
   const stVal = Number(st) || 0;
-  const soVal = Number(so) || 0;
-  return Math.round((soVal - stVal) * 100) / 100;
+  return Math.round((normalizedSo - stVal) * 100) / 100;
 }
 
 /**

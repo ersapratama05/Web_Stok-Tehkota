@@ -169,8 +169,9 @@ export function buildRecordCsvContent(record: RekapRecord): string {
   lines.push('TABEL REKAP STOK');
   lines.push('Kategori;Nama Barang;Satuan;IN (Masuk);OUT (Keluar);SA (Stok Awal);ST (Stok Akhir);SO (Opname)');
   for (const item of record.stocks) {
+    const soDisplay = item.so !== null && item.so !== undefined ? item.so : '-';
     lines.push(
-      `"${item.category}";"${item.name}";"${item.unit}";${item.inQty};${item.outQty};${item.sa};${item.st};${item.so}`
+      `"${item.category}";"${item.name}";"${item.unit}";${item.inQty};${item.outQty};${item.sa};${item.st};${soDisplay}`
     );
   }
   lines.push('');
@@ -422,7 +423,11 @@ export function renderRecordCanvas(
 
       c.fillStyle = '#0f172a';
       c.font = 'bold 11px "Plus Jakarta Sans", monospace';
-      c.fillText(String(item.so), cols[4].x + cols[4].w / 2, curY + 15);
+      c.fillText(
+        item.so !== null && item.so !== undefined ? String(item.so) : '-',
+        cols[4].x + cols[4].w / 2,
+        curY + 15
+      );
 
       c.textAlign = 'left';
       curY += rowHeight;
