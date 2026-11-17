@@ -55,6 +55,100 @@ export function calculateHabisGula(
 }
 
 /**
+ * Validasi bahwa nilai angka gula benar-benar terisi (bukan null/undefined/string kosong/NaN/negatif)
+ */
+export function isValidGulaNumber(value: unknown): boolean {
+  if (value === undefined || value === null || value === '') return false;
+  const num = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(num) && num >= 0;
+}
+
+/**
+ * Rumus Gula Kemarin Berikutnya:
+ * Gula Kemarin Berikutnya = Sisa Gula Fisik Sebelumnya + Gula Cair Sebelumnya
+ */
+export function calculateGulaKemarinCarryover(
+  sisaGula: number | string | undefined | null,
+  gulaCair: number | string | undefined | null
+): number {
+  const sisa = Math.max(0, Number(sisaGula) || 0);
+  const cair = Math.max(0, Number(gulaCair) || 0);
+  return Math.round((sisa + cair) * 100) / 100;
+}
+
+/**
+ * Mengambil nilai Gula Kemarin secara aman dari rekapan terdekat sebelumnya pada cabang yang sama.
+ * - Tidak mengambil data dari outlet berbeda maupun tanggal >= targetDate
+ * - Jika tidak ada rekapan sebelumnya: hasPreviousRecord = false, hasPreviousGula = false, gulaKemarin = 0
+ * - Jika rekapan sebelumnya masih draft atau sisaGula/gulaCair kosong/belum lengkap:
+ *   tidak dianggap terkonfirmasi (hasPreviousGula = false, isIncomplete = true, gulaKemarin = 0)
+ */
+export function resolvePreviousGulaCarryover(
+  records: Array<{
+    branch: string;
+    date: string;
+    status?: string;
+    gulaDetail?: Partial<GulaDetail> | null;
+  }>,
+  branch: string,
+  targetDate: string
+): {
+  hasPreviousRecord: boolean;
+  hasPreviousGula: boolean;
+  isIncomplete: boolean;
+  previousDate?: string;
+  gulaKemarin: number;
+} {
+  if (!Array.isArray(records) || !branch || !targetDate) {
+    return {
+      hasPreviousRecord: false,
+      hasPreviousGula: false,
+      isIncomplete: false,
+      gulaKemarin: 0,
+    };
+  }
+
+  const priorRecords = records
+    .filter((r) => r && r.branch === branch && typeof r.date === 'string' && r.date < targetDate)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const previousRecord = priorRecords[0];
+  if (!previousRecord) {
+    return {
+      hasPreviousRecord: false,
+      hasPreviousGula: false,
+      isIncomplete: false,
+      gulaKemarin: 0,
+    };
+  }
+
+  const gd = previousRecord.gulaDetail;
+  const isComplete =
+    previousRecord.status !== 'draft' &&
+    Boolean(gd) &&
+    isValidGulaNumber(gd?.sisaGula) &&
+    isValidGulaNumber(gd?.gulaCair);
+
+  if (!isComplete) {
+    return {
+      hasPreviousRecord: true,
+      hasPreviousGula: false,
+      isIncomplete: true,
+      previousDate: previousRecord.date,
+      gulaKemarin: 0,
+    };
+  }
+
+  return {
+    hasPreviousRecord: true,
+    hasPreviousGula: true,
+    isIncomplete: false,
+    previousDate: previousRecord.date,
+    gulaKemarin: calculateGulaKemarinCarryover(gd!.sisaGula, gd!.gulaCair),
+  };
+}
+
+/**
  * Validasi input perhitungan gula agar tidak negatif atau tidak masuk akal
  */
 export function validateGulaDetail(gula: Partial<GulaDetail>): { valid: boolean; warning?: string; error?: string } {

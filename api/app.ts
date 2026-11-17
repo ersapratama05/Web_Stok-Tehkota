@@ -16,6 +16,7 @@ import {
   getJakartaTimeStr,
   getTodayDateStr,
   getYesterdayDateStr,
+  resolvePreviousGulaCarryover,
   validateGulaDetail,
 } from '../src/utils/calculations';
 import {
@@ -309,7 +310,7 @@ async function recalculateBranchChainAfterDelete(branch: Branch, deletedDate: st
 async function getCarryoverForDate(branch: Branch, targetDate: string) {
   const allBranch = await db.getRecords({ branch });
   const priorRecords = allBranch
-    .filter((r) => r.date < targetDate)
+    .filter((r) => r.branch === branch && typeof r.date === 'string' && r.date < targetDate)
     .sort((a, b) => b.date.localeCompare(a.date));
 
   const previousRecord = priorRecords[0];
@@ -321,6 +322,7 @@ async function getCarryoverForDate(branch: Branch, targetDate: string) {
     return {
       hasPrevious: false,
       hasPreviousGula: false,
+      previousGulaIncomplete: false,
       previousDate: undefined as string | undefined,
       previousRecordId: undefined as string | undefined,
       stocks: map,
@@ -333,17 +335,17 @@ async function getCarryoverForDate(branch: Branch, targetDate: string) {
     map[item.name] = item.st;
   }
 
-  // Per Master Prompt section 5:
-  // "Gula kemarin otomatis mengambil nilai sisa dari rekapan hari sebelumnya pada cabang yang sama."
-  const prevSisaGula = previousRecord.gulaDetail ? Number(previousRecord.gulaDetail.sisaGula) || 0 : 0;
+  // Gula Kemarin Berikutnya = Sisa Gula Fisik Sebelumnya + Gula Cair Sebelumnya (cabang & tanggal sebelumnya)
+  const sugarCarryover = resolvePreviousGulaCarryover(allBranch, branch, targetDate);
 
   return {
     hasPrevious: true,
-    hasPreviousGula: Boolean(previousRecord.gulaDetail),
+    hasPreviousGula: sugarCarryover.hasPreviousGula,
+    previousGulaIncomplete: sugarCarryover.isIncomplete,
     previousDate: previousRecord.date,
     previousRecordId: previousRecord.id,
     stocks: map,
-    gulaKemarin: prevSisaGula,
+    gulaKemarin: sugarCarryover.gulaKemarin,
   };
 }
 
@@ -379,13 +381,15 @@ async function applyTransferStockToBranch(params: {
       totalPengeluaran: 0,
       qris: 0,
       omsetAkhir: 0,
-      gulaDetail: {
-        gulaAmbil: 0,
-        gulaKemarin: carryover.gulaKemarin,
-        sisaGula: carryover.gulaKemarin,
-        gulaCair: 0,
-        habisGula: 0,
-      },
+      gulaDetail: carryover.hasPreviousGula
+        ? {
+            gulaAmbil: 0,
+            gulaKemarin: carryover.gulaKemarin,
+            sisaGula: carryover.gulaKemarin,
+            gulaCair: 0,
+            habisGula: 0,
+          }
+        : undefined,
       notes: '',
       revisionCount: 0,
       auditLogs: [],

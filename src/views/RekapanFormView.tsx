@@ -15,6 +15,7 @@ import {
   getTodayDateStr,
   getYesterdayDateStr,
   parseRupiahInput,
+  resolvePreviousGulaCarryover,
   validateGulaDetail,
 } from '../utils/calculations';
 import { createInitialStockRows } from '../utils/itemsList';
@@ -96,6 +97,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   const [loadedUpdatedAt, setLoadedUpdatedAt] = useState<string | null>(null);
   const [hasServerRecord, setHasServerRecord] = useState<boolean>(false);
   const [hasPreviousGula, setHasPreviousGula] = useState<boolean>(false);
+  const [previousGulaIncomplete, setPreviousGulaIncomplete] = useState<boolean>(false);
   const [previousGulaDate, setPreviousGulaDate] = useState<string | undefined>(undefined);
   const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [conflictModal, setConflictModal] = useState<{
@@ -151,6 +153,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             setHasServerRecord(true);
             setLoadedUpdatedAt(existing.updatedAt || null);
             setHasPreviousGula(false);
+            setPreviousGulaIncomplete(false);
             setPreviousGulaDate(undefined);
             setStocks(existing.stocks);
             setExpenses(existing.expenses || []);
@@ -218,6 +221,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             setGulaCair(localDraft.gulaDetail.gulaCair || 0);
           }
           setHasPreviousGula(false);
+          setPreviousGulaIncomplete(false);
           setPreviousGulaDate(undefined);
           setRevisionInfo(null);
           setSaveMessage({
@@ -228,13 +232,16 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           return;
         }
 
-        // 3. New record: Fetch previous day ST to auto-populate SA & Gula Kemarin (sisaGula hari sebelumnya)
+        // 3. New record: Fetch previous day ST to auto-populate SA & Gula Kemarin (Sisa Gula Fisik + Gula Cair hari sebelumnya)
         const prevRes = await apiFetch(`/api/records/previous-stock?branch=${targetBranch}&date=${targetDate}`);
+        let serverResponded = false;
         let prevStocksMap: Record<string, number> | undefined;
         let autoGulaKemarin = 0;
         let foundPrevGula = false;
+        let prevGulaIncomplete = false;
         let prevDateLabel: string | undefined;
         if (prevRes.ok) {
+          serverResponded = true;
           const prevData = await prevRes.json();
           if (prevData.stocks) {
             prevStocksMap = prevData.stocks;
@@ -243,27 +250,27 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             autoGulaKemarin = prevData.gulaKemarin;
           }
           foundPrevGula = Boolean(prevData.hasPreviousGula);
+          prevGulaIncomplete = Boolean(prevData.previousGulaIncomplete);
           prevDateLabel = prevData.previousDate;
         }
 
-        // Offline / cached fallback for carryover SA & Gula Kemarin (sisaGula hari sebelumnya pada cabang sama)
-        if (!prevStocksMap || (!foundPrevGula && autoGulaKemarin === 0)) {
-          const cachedPrior = getCachedRecords()
+        // Offline / network-error fallback ONLY when server did not respond
+        if (!serverResponded) {
+          const cachedAll = getCachedRecords();
+          const cachedPrior = cachedAll
             .filter((r) => r.branch === targetBranch && r.date < targetDate)
             .sort((a, b) => b.date.localeCompare(a.date))[0];
-          if (cachedPrior) {
-            if (!prevStocksMap && cachedPrior.stocks) {
-              prevStocksMap = {};
-              for (const item of cachedPrior.stocks) {
-                prevStocksMap[item.name] = item.st;
-              }
-            }
-            if (!foundPrevGula && cachedPrior.gulaDetail) {
-              autoGulaKemarin = cachedPrior.gulaDetail.sisaGula || 0;
-              foundPrevGula = true;
-              prevDateLabel = cachedPrior.date;
+          if (cachedPrior && cachedPrior.stocks) {
+            prevStocksMap = {};
+            for (const item of cachedPrior.stocks) {
+              prevStocksMap[item.name] = item.st;
             }
           }
+          const sugarFallback = resolvePreviousGulaCarryover(cachedAll, targetBranch, targetDate);
+          autoGulaKemarin = sugarFallback.gulaKemarin;
+          foundPrevGula = sugarFallback.hasPreviousGula;
+          prevGulaIncomplete = sugarFallback.isIncomplete;
+          prevDateLabel = sugarFallback.previousDate;
         }
 
         const freshStocks = createInitialStockRows(prevStocksMap);
@@ -276,6 +283,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         setGulaAmbil(0);
         setGulaKemarin(autoGulaKemarin);
         setHasPreviousGula(foundPrevGula);
+        setPreviousGulaIncomplete(prevGulaIncomplete);
         setPreviousGulaDate(prevDateLabel);
         setSisaGula(0);
         setGulaCair(0);
@@ -288,6 +296,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         setGulaAmbil(0);
         setGulaKemarin(0);
         setHasPreviousGula(false);
+        setPreviousGulaIncomplete(false);
         setPreviousGulaDate(undefined);
         setSisaGula(0);
         setGulaCair(0);
@@ -1321,7 +1330,11 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                     : 'bg-amber-100 text-amber-800'
                 }`}
               >
-                {hasPreviousGula ? `Auto Sisa ${previousGulaDate || 'Kemarin'}` : 'Saldo Awal Manual'}
+                {hasPreviousGula
+                  ? `Auto Sisa+Cair ${previousGulaDate || 'Kemarin'}`
+                  : previousGulaIncomplete
+                  ? `Gula ${previousGulaDate || 'Kemarin'} Belum Lengkap`
+                  : 'Saldo Awal Manual'}
               </span>
             </div>
             <div className="relative">
@@ -1337,7 +1350,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
               <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-500">KG</span>
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
-              Otomatis dari Sisa Gula kemarin (bisa dikoreksi)
+              Otomatis dari (Sisa Gula + Gula Cair) kemarin (bisa dikoreksi)
             </p>
           </div>
 
@@ -1359,7 +1372,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
               <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-500">KG</span>
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
-              Diteruskan ke Gula Kemarin besok
+              Digabung dg Gula Cair ke Gula Kemarin besok
             </p>
           </div>
 
@@ -1381,7 +1394,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
               <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-500">KG</span>
             </div>
             <p className="text-[10px] text-slate-500 mt-1">
-              Sisa gula cair siap pakai (KG)
+              Ikut diteruskan ke Gula Kemarin besok (KG)
             </p>
           </div>
         </div>

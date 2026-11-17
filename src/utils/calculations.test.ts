@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   calculateStokAkhir,
   calculateCupSO,
+  calculateGulaKemarinCarryover,
   calculateHabisGula,
   calculateTotalPengeluaran,
   calculateOmsetAkhir,
@@ -10,6 +11,7 @@ import {
   calculateStokSelisih,
   formatNumberId,
   parseRupiahInput,
+  resolvePreviousGulaCarryover,
 } from './calculations';
 
 test('Rumus ST = SA + IN - OUT', () => {
@@ -115,4 +117,154 @@ test('Parsing dan format Rupiah dengan pemisah ribuan titik', () => {
   assert.equal(parseRupiahInput('10000'), 10000);
   assert.equal(parseRupiahInput('10.0000'), 100000);
   assert.equal(parseRupiahInput(''), 0);
+});
+
+test('Perpindahan stok gula harian: 16 Nov -> 17 Nov -> 18 Nov (Gula Kemarin = Sisa Fisik + Gula Cair)', () => {
+  // Kasus contoh wajib: 16 Nov -> Ambil 10, Kemarin 12, Sisa Fisik 6, Gula Cair 2
+  const nov16Habis = calculateHabisGula(10, 12, 6, 2);
+  assert.equal(nov16Habis, 14);
+
+  const records = [
+    {
+      branch: 'Sompok',
+      date: '2026-11-16',
+      status: 'saved',
+      gulaDetail: {
+        gulaAmbil: 10,
+        gulaKemarin: 12,
+        sisaGula: 6,
+        gulaCair: 2,
+        habisGula: nov16Habis,
+      },
+    },
+  ];
+
+  // Buat rekapan 17 Nov -> Gula Kemarin wajib 6 + 2 = 8 KG
+  const carry17 = resolvePreviousGulaCarryover(records, 'Sompok', '2026-11-17');
+  assert.equal(carry17.hasPreviousRecord, true);
+  assert.equal(carry17.hasPreviousGula, true);
+  assert.equal(carry17.isIncomplete, false);
+  assert.equal(carry17.previousDate, '2026-11-16');
+  assert.equal(carry17.gulaKemarin, 8);
+
+  // Simpan rekapan 17 Nov (misal Ambil 4, Kemarin 8, Sisa Fisik 5, Gula Cair 1 -> Habis 6)
+  const nov17Habis = calculateHabisGula(4, carry17.gulaKemarin, 5, 1);
+  assert.equal(nov17Habis, 6);
+  records.push({
+    branch: 'Sompok',
+    date: '2026-11-17',
+    status: 'saved',
+    gulaDetail: {
+      gulaAmbil: 4,
+      gulaKemarin: carry17.gulaKemarin,
+      sisaGula: 5,
+      gulaCair: 1,
+      habisGula: nov17Habis,
+    },
+  });
+
+  // Buat rekapan 18 Nov -> Gula Kemarin wajib 5 + 1 = 6 KG
+  const carry18 = resolvePreviousGulaCarryover(records, 'Sompok', '2026-11-18');
+  assert.equal(carry18.hasPreviousGula, true);
+  assert.equal(carry18.previousDate, '2026-11-17');
+  assert.equal(carry18.gulaKemarin, 6);
+
+  // Pastikan rekapan tanggal sebelumnya (16 Nov) tidak berubah
+  assert.deepEqual(records[0].gulaDetail, {
+    gulaAmbil: 10,
+    gulaKemarin: 12,
+    sisaGula: 6,
+    gulaCair: 2,
+    habisGula: 14,
+  });
+
+  // Kasus desimal: Sisa 3.5 + Cair 1.25 = 4.75
+  assert.equal(calculateGulaKemarinCarryover(3.5, 1.25), 4.75);
+});
+
+test('Pemisahan outlet (Sompok vs Suyudono), pemisahan tanggal, dan penanganan rekapan sebelumnya kosong/belum lengkap', () => {
+  const multiBranchRecords = [
+    {
+      branch: 'Sompok',
+      date: '2026-11-16',
+      status: 'saved',
+      gulaDetail: { gulaAmbil: 10, gulaKemarin: 12, sisaGula: 6, gulaCair: 2, habisGula: 14 },
+    },
+    {
+      branch: 'Suyudono',
+      date: '2026-11-16',
+      status: 'saved',
+      gulaDetail: { gulaAmbil: 8, gulaKemarin: 5, sisaGula: 3, gulaCair: 1, habisGula: 9 },
+    },
+    {
+      branch: 'Sompok',
+      date: '2026-11-20',
+      status: 'saved',
+      gulaDetail: { gulaAmbil: 5, gulaKemarin: 2, sisaGula: 4, gulaCair: 3, habisGula: 0 },
+    },
+  ];
+
+  // Suyudono 17 Nov hanya mengambil Suyudono 16 Nov (3 + 1 = 4), bukan Sompok (8)
+  const suyudono17 = resolvePreviousGulaCarryover(multiBranchRecords, 'Suyudono', '2026-11-17');
+  assert.equal(suyudono17.gulaKemarin, 4);
+  assert.equal(suyudono17.previousDate, '2026-11-16');
+
+  // Sompok 17 Nov tidak boleh mengambil data masa depan (20 Nov)
+  const sompok17 = resolvePreviousGulaCarryover(multiBranchRecords, 'Sompok', '2026-11-17');
+  assert.equal(sompok17.gulaKemarin, 8);
+  assert.equal(sompok17.previousDate, '2026-11-16');
+
+  // Tanggal sebelum rekapan pertama Suyudono tidak mengarang nilai atau mengambil dari Sompok
+  const suyudonoNoPrev = resolvePreviousGulaCarryover(multiBranchRecords, 'Suyudono', '2026-11-16');
+  assert.equal(suyudonoNoPrev.hasPreviousRecord, false);
+  assert.equal(suyudonoNoPrev.hasPreviousGula, false);
+  assert.equal(suyudonoNoPrev.isIncomplete, false);
+  assert.equal(suyudonoNoPrev.gulaKemarin, 0);
+
+  // Rekapan sebelumnya belum lengkap (gulaDetail null/undefined)
+  const incompleteMissingDetail = resolvePreviousGulaCarryover(
+    [{ branch: 'Suyudono', date: '2026-11-29', status: 'saved', gulaDetail: undefined }],
+    'Suyudono',
+    '2026-11-30'
+  );
+  assert.equal(incompleteMissingDetail.hasPreviousRecord, true);
+  assert.equal(incompleteMissingDetail.hasPreviousGula, false);
+  assert.equal(incompleteMissingDetail.isIncomplete, true);
+  assert.equal(incompleteMissingDetail.gulaKemarin, 0);
+
+  // Rekapan sebelumnya masih draft
+  const draftPrior = resolvePreviousGulaCarryover(
+    [
+      {
+        branch: 'Sompok',
+        date: '2026-11-16',
+        status: 'draft',
+        gulaDetail: { gulaAmbil: 0, gulaKemarin: 0, sisaGula: 6, gulaCair: 2, habisGula: 0 },
+      },
+    ],
+    'Sompok',
+    '2026-11-17'
+  );
+  assert.equal(draftPrior.hasPreviousRecord, true);
+  assert.equal(draftPrior.hasPreviousGula, false);
+  assert.equal(draftPrior.isIncomplete, true);
+  assert.equal(draftPrior.gulaKemarin, 0);
+
+  // Rekapan sebelumnya field gulaCair kosong/undefined -> tidak dianggap terkonfirmasi
+  const partialGula = resolvePreviousGulaCarryover(
+    [
+      {
+        branch: 'Sompok',
+        date: '2026-11-16',
+        status: 'saved',
+        gulaDetail: { gulaAmbil: 10, gulaKemarin: 12, sisaGula: 6, gulaCair: undefined as any },
+      },
+    ],
+    'Sompok',
+    '2026-11-17'
+  );
+  assert.equal(partialGula.hasPreviousRecord, true);
+  assert.equal(partialGula.hasPreviousGula, false);
+  assert.equal(partialGula.isIncomplete, true);
+  assert.equal(partialGula.gulaKemarin, 0);
 });
