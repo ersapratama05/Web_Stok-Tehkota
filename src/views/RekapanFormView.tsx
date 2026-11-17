@@ -210,7 +210,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             );
           }
           if (localDraft.qris !== undefined) setQris(localDraft.qris);
-          if (localDraft.notes) setNotes(localDraft.notes);
+          setNotes(localDraft.notes || '');
           if (localDraft.gulaDetail) {
             setGulaAmbil(localDraft.gulaDetail.gulaAmbil || 0);
             setGulaKemarin(localDraft.gulaDetail.gulaKemarin || 0);
@@ -1514,7 +1514,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Catat kondisi mesin sealer, kerusakan barang, atau pesan pergantian shift..."
+            placeholder="Contoh: Grab: 2 pesanan, ShopeeFood: 1 pesanan, kondisi mesin sealer, atau pesan shift..."
             className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-1 focus:ring-emerald-600 outline-none"
           />
         </div>

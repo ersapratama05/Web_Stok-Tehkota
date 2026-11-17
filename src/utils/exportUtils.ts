@@ -69,9 +69,71 @@ function drawCircularLogo(
 }
 
 /**
- * Unduh Rekapan sebagai File CSV
+ * Pecah teks panjang / multibaris menjadi array baris agar muat di lebar kolom tertentu
  */
-export function exportRecordToCsv(record: RekapRecord): void {
+export function wrapTextLines(
+  text: string,
+  maxWidth: number,
+  measureWidth: (sample: string) => number
+): string[] {
+  const cleaned = (text || '').replace(/\r\n/g, '\n').trim();
+  if (!cleaned) return ['-'];
+
+  const paragraphs = cleaned.split('\n');
+  const lines: string[] = [];
+
+  for (const para of paragraphs) {
+    const trimmedPara = para.trim();
+    if (!trimmedPara) {
+      lines.push('');
+      continue;
+    }
+
+    const words = trimmedPara.split(/\s+/);
+    let currentLine = '';
+
+    for (const word of words) {
+      const candidate = currentLine ? `${currentLine} ${word}` : word;
+      if (measureWidth(candidate) <= maxWidth) {
+        currentLine = candidate;
+        continue;
+      }
+
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = '';
+      }
+
+      // Pecah per karakter jika satu kata sangat panjang melebihi maxWidth
+      if (measureWidth(word) > maxWidth) {
+        let chunk = '';
+        for (const ch of word) {
+          const nextChunk = chunk + ch;
+          if (measureWidth(nextChunk) > maxWidth && chunk) {
+            lines.push(chunk);
+            chunk = ch;
+          } else {
+            chunk = nextChunk;
+          }
+        }
+        currentLine = chunk;
+      } else {
+        currentLine = word;
+      }
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+  }
+
+  return lines.length > 0 ? lines : ['-'];
+}
+
+/**
+ * Bangun isi file CSV lengkap termasuk Catatan Tambahan Kasir / Outlet
+ */
+export function buildRecordCsvContent(record: RekapRecord): string {
   const lines: string[] = [];
 
   lines.push(`REKAPAN TEH KOTA - CABANG ${record.branch.toUpperCase()}`);
@@ -127,14 +189,27 @@ export function exportRecordToCsv(record: RekapRecord): void {
   lines.push('No;Nama Pengeluaran;Harga (Rp)');
   if (record.expenses && record.expenses.length > 0) {
     record.expenses.forEach((exp, idx) => {
-      lines.push(`${idx + 1};"${exp.name}";${exp.amount}`);
+      lines.push(`${idx + 1};"${(exp.name || '').replace(/"/g, '""')}";${exp.amount}`);
     });
   } else {
     lines.push(';Tidak ada pengeluaran;0');
   }
   lines.push(`;TOTAL PENGELUARAN;${record.totalPengeluaran}`);
+  lines.push('');
 
-  const csvContent = '\uFEFF' + lines.join('\r\n');
+  const trimmedNotes = (record.notes || '').replace(/\r\n/g, '\n').trim();
+  const escapedNotes = (trimmedNotes || '-').replace(/"/g, '""');
+  lines.push('CATATAN TAMBAHAN KASIR / OUTLET');
+  lines.push(`Catatan;"${escapedNotes}"`);
+
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+/**
+ * Unduh Rekapan sebagai File CSV
+ */
+export function exportRecordToCsv(record: RekapRecord): void {
+  const csvContent = buildRecordCsvContent(record);
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -157,6 +232,7 @@ export function renderRecordCanvas(
   const canvas = document.createElement('canvas');
   const scale = 2; // High-res crisp print
   const width = 1200;
+  const colW = 560;
 
   const bahanPokok = record.stocks.filter((s) => s.category === 'Perlengkapan / Bahan Pokok');
   const yoghurtSeries = record.stocks.filter((s) => s.category === 'Yoghurt Series');
@@ -180,14 +256,31 @@ export function renderRecordCanvas(
   const coffeeHeight = headerRowHeight + coffeeSeries.length * rowHeight;
   const gulaHeight = headerRowHeight + 4 * rowHeight + 28;
   const financialHeight = headerRowHeight + 4 * 26;
-  const noteExtra = record.notes ? 56 : 0;
+  const measureCtx = canvas.getContext('2d');
+  const noteText = (record.notes || '').trim() || '-';
+  const noteMaxWidth = colW - 20;
+  const noteLineHeight = 16;
+  const noteHeaderHeight = 22;
+  const notePadTop = 8;
+  const notePadBottom = 10;
+
+  let noteLines: string[] = ['-'];
+  if (measureCtx) {
+    measureCtx.font = '11px "Plus Jakarta Sans", sans-serif';
+    noteLines = wrapTextLines(noteText, noteMaxWidth, (sample) => measureCtx.measureText(sample).width);
+  } else {
+    noteLines = wrapTextLines(noteText, 76, (sample) => sample.length);
+  }
+
+  const noteBoxHeight = noteHeaderHeight + notePadTop + noteLines.length * noteLineHeight + notePadBottom;
+  const noteExtra = gap + noteBoxHeight;
   const rightTotalHeight =
     teaHeight + gap + coffeeHeight + gap + gulaHeight + gap + financialHeight + noteExtra;
 
-  const topHeaderHeight = 104;
-  const bottomFooterHeight = 44;
+  const contentStartY = 110;
+  const bottomFooterHeight = 40;
   const contentHeight = Math.max(leftTotalHeight, rightTotalHeight);
-  const totalHeight = topHeaderHeight + contentHeight + bottomFooterHeight;
+  const totalHeight = contentStartY + contentHeight + bottomFooterHeight;
 
   canvas.width = width * scale;
   canvas.height = totalHeight * scale;
@@ -243,11 +336,10 @@ export function renderRecordCanvas(
   ctx.textAlign = 'left';
 
   // 2-Column Layout
-  const colW = 560;
   const leftX = 24;
   const rightX = 616;
-  let leftY = 110;
-  let rightY = 110;
+  let leftY = contentStartY;
+  let rightY = contentStartY;
 
   function drawStockTable(
     c: CanvasRenderingContext2D,
@@ -510,20 +602,30 @@ export function renderRecordCanvas(
     rightY += 26;
   });
 
-  if (record.notes) {
-    rightY += gap;
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(rightX, rightY, colW, 44);
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.strokeRect(rightX, rightY, colW, 44);
-    ctx.fillStyle = '#475569';
-    ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
-    ctx.fillText('CATATAN OPERASIONAL:', rightX + 8, rightY + 16);
-    ctx.font = '10px "Plus Jakarta Sans", sans-serif';
-    const notePreview = record.notes.replace(/\n/g, ' • ').slice(0, 95);
-    ctx.fillText(notePreview, rightX + 8, rightY + 33);
-    rightY += 44;
+  // Catatan Tambahan Kasir / Outlet (Selalu ditampilkan lengkap tanpa terpotong)
+  rightY += gap;
+  ctx.fillStyle = '#f8fafc';
+  ctx.fillRect(rightX, rightY, colW, noteBoxHeight);
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(rightX, rightY, colW, noteBoxHeight);
+
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(rightX, rightY, colW, noteHeaderHeight);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
+  ctx.fillText('CATATAN TAMBAHAN KASIR / OUTLET', rightX + 10, rightY + 15);
+
+  ctx.fillStyle = noteText === '-' ? '#64748b' : '#0f172a';
+  ctx.font = '11px "Plus Jakarta Sans", sans-serif';
+  let noteLineY = rightY + noteHeaderHeight + notePadTop + 11;
+  for (const line of noteLines) {
+    if (line) {
+      ctx.fillText(line, rightX + 10, noteLineY);
+    }
+    noteLineY += noteLineHeight;
   }
+  rightY += noteBoxHeight;
 
   // Footer
   const maxEndY = Math.max(leftY, rightY) + 22;

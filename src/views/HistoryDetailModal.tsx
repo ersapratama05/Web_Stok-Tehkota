@@ -384,13 +384,13 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
             )}
           </div>
 
-          {/* Notes if any */}
-          {record.notes && (
-            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700">
-              <strong className="block text-slate-900 mb-1">Catatan Operasional:</strong>
-              <p className="whitespace-pre-line">{record.notes}</p>
-            </div>
-          )}
+          {/* Notes */}
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700">
+            <strong className="block text-slate-900 mb-1">Catatan Tambahan Kasir / Outlet:</strong>
+            <p className="whitespace-pre-wrap break-words">
+              {(record.notes || '').trim() || '-'}
+            </p>
+          </div>
 
           {/* SECTION: RIWAYAT PERUBAHAN (LOG EDIT MULTI-PERANGKAT) */}
           {record.auditLogs && record.auditLogs.length > 0 && (

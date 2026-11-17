@@ -990,6 +990,7 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
 
     const totalPengeluaran = calculateTotalPengeluaran(expenses);
     const qrisNum = Number(qris) || 0;
+    const normalizedNotes = typeof notes === 'string' ? notes : String(notes ?? '');
     const hasExplicitOmsetAkhir = bodyOmsetAkhir !== undefined && bodyOmsetAkhir !== null;
     const omsetAkhir = hasExplicitOmsetAkhir
       ? Number(bodyOmsetAkhir) || 0
@@ -1065,6 +1066,14 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
           }
         }
       }
+      if ((targetExisting.notes || '') !== normalizedNotes) {
+        changes.push({
+          field: 'notes',
+          label: 'Catatan Tambahan Kasir / Outlet',
+          before: targetExisting.notes || '-',
+          after: normalizedNotes || '-',
+        });
+      }
     }
 
     let auditEntry: AuditLogEntry | undefined;
@@ -1079,7 +1088,7 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
         timestamp: now,
         note: !isUpdate
           ? `Membuat rekapan baru Cabang ${branch}`
-          : notes || 'Perubahan data rekapan dari perangkat',
+          : normalizedNotes || 'Perubahan data rekapan dari perangkat',
         changes: !isUpdate
           ? [
               {
@@ -1118,7 +1127,7 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
       qris: qrisNum,
       omsetAkhir,
       gulaDetail: normalizedGula || undefined,
-      notes,
+      notes: normalizedNotes,
       auditLogs: mergedLogs,
     };
 
