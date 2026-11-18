@@ -25,6 +25,36 @@ export function calculateCupSO(slop: number, pcs: number): number {
 }
 
 /**
+ * Daftar produk yang memiliki kalkulator SO khusus (Jumlah Eceran + Jumlah PCS)
+ */
+export const SO_CALCULATOR_PRODUCTS = [
+  'LEMON',
+  'LECI',
+  'PASSION',
+  'MELON',
+  'APEL',
+  'MANGGA',
+  'GRAPE',
+] as const;
+
+export function isProductSoCalculatorItem(name: string): boolean {
+  return (SO_CALCULATOR_PRODUCTS as readonly string[]).includes(name);
+}
+
+/**
+ * Rumus Perhitungan SO Produk (LEMON, LECI, PASSION, MELON, APEL, MANGGA, GRAPE):
+ * Total SO = Jumlah Eceran + Jumlah PCS
+ */
+export function calculateProductEceranPcsSO(
+  eceran: number | string | null | undefined,
+  pcs: number | string | null | undefined
+): number {
+  const e = Math.max(0, Number(eceran) || 0);
+  const p = Math.max(0, Number(pcs) || 0);
+  return Math.round((e + p) * 100) / 100;
+}
+
+/**
  * Konversi satuan pengiriman barang ke satuan stok gudang outlet
  * Khusus CUP: 1 slop = 50 pcs
  */

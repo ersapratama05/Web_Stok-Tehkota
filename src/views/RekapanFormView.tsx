@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Branch, CupDetail, ExpenseItem, RekapRecord, StockItemRow } from '../types';
+import { Branch, CupDetail, ExpenseItem, ProductSoDetail, RekapRecord, StockItemRow } from '../types';
 import { apiFetch } from '../utils/api';
 import {
   calculateHabisGula,
@@ -14,6 +14,7 @@ import {
   getJakartaTimeStr,
   getTodayDateStr,
   getYesterdayDateStr,
+  isProductSoCalculatorItem,
   parseRupiahInput,
   resolvePreviousGulaCarryover,
   validateGulaDetail,
@@ -30,6 +31,7 @@ import {
   removeFromSyncQueue,
 } from '../utils/storage';
 import { CupModal } from '../components/CupModal';
+import { ProductSoModal } from '../components/ProductSoModal';
 import {
   Save,
   Clock,
@@ -91,6 +93,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   const [activeCategory, setActiveCategory] = useState<string>('Semua');
   const [sectionFilter, setSectionFilter] = useState<'all' | 'stok' | 'pengeluaran' | 'gula' | 'keuangan'>('all');
   const [isCupModalOpen, setIsCupModalOpen] = useState<boolean>(false);
+  const [activeSoModalProduct, setActiveSoModalProduct] = useState<string | null>(null);
   const [isLoadingRecord, setIsLoadingRecord] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -435,6 +438,20 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           ...item,
           so: detail.calculatedSo,
           cupDetail: detail,
+        };
+      })
+    );
+  };
+
+  // Handle Product SO Calculator Save (LEMON, LECI, PASSION, MELON, APEL, MANGGA, GRAPE)
+  const handleSaveProductSoDetail = (productName: string, detail: ProductSoDetail) => {
+    setStocks((prev) =>
+      prev.map((item) => {
+        if (item.name !== productName) return item;
+        return {
+          ...item,
+          so: detail.calculatedSo,
+          soDetail: detail,
         };
       })
     );
@@ -1089,6 +1106,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
               ) : (
                 filteredStocks.map((row, idx) => {
                   const isCup = row.name === 'CUP';
+                  const isProductSoCalc = isProductSoCalculatorItem(row.name);
 
                   return (
                     <tr
@@ -1099,7 +1117,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                     >
                       {/* Frozen Barang Column */}
                       <td className="py-2.5 px-4 sticky-col-left bg-inherit font-semibold text-slate-900 border-r border-slate-100">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-1.5">
                           <span>{row.name}</span>
                           {isCup && (
                             <button
@@ -1109,6 +1127,16 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                               title="Buka kalkulator CUP"
                             >
                               Slop/Pcs
+                            </button>
+                          )}
+                          {isProductSoCalc && (
+                            <button
+                              type="button"
+                              onClick={() => setActiveSoModalProduct(row.name)}
+                              className="text-[10px] text-emerald-700 bg-emerald-100/70 hover:bg-emerald-200 px-1.5 py-0.5 rounded font-bold"
+                              title={`Buka kalkulator SO ${row.name}`}
+                            >
+                              Eceran/Pcs
                             </button>
                           )}
                         </div>
@@ -1155,13 +1183,24 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                         {row.st}
                       </td>
 
-                      {/* SO (Manual or CUP calculated) */}
+                      {/* SO (Manual, CUP calculated, or Product Eceran+PCS calculated) */}
                       <td className="py-2 px-2 text-right bg-emerald-50/20">
                         {isCup ? (
                           <div
                             onClick={() => setIsCupModalOpen(true)}
                             className="w-full px-2 py-1.5 text-right font-mono font-bold text-emerald-900 bg-emerald-100/60 hover:bg-emerald-200 rounded-lg cursor-pointer tabular-nums flex items-center justify-between"
                             title="Klik untuk mengisi/ubah rincian slop/pcs"
+                          >
+                            <span className="text-[10px] text-emerald-700 font-sans">
+                              {row.so !== null && row.so !== undefined ? 'edit' : 'isi'}
+                            </span>
+                            <span>{row.so !== null && row.so !== undefined ? row.so : '-'}</span>
+                          </div>
+                        ) : isProductSoCalc ? (
+                          <div
+                            onClick={() => setActiveSoModalProduct(row.name)}
+                            className="w-full px-2 py-1.5 text-right font-mono font-bold text-emerald-900 bg-emerald-100/60 hover:bg-emerald-200 rounded-lg cursor-pointer tabular-nums flex items-center justify-between"
+                            title={`Klik untuk hitung SO ${row.name} (Eceran + PCS)`}
                           >
                             <span className="text-[10px] text-emerald-700 font-sans">
                               {row.so !== null && row.so !== undefined ? 'edit' : 'isi'}
@@ -1620,6 +1659,18 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           initialDetail={cupItem?.cupDetail}
           onSave={handleSaveCupDetail}
           onClose={() => setIsCupModalOpen(false)}
+        />
+      )}
+
+      {/* Product SO Calculator Modal (LEMON, LECI, PASSION, MELON, APEL, MANGGA, GRAPE) */}
+      {activeSoModalProduct && (
+        <ProductSoModal
+          key={activeSoModalProduct}
+          productName={activeSoModalProduct}
+          unit={stocks.find((s) => s.name === activeSoModalProduct)?.unit || 'porsi'}
+          initialDetail={stocks.find((s) => s.name === activeSoModalProduct)?.soDetail}
+          onSave={(detail) => handleSaveProductSoDetail(activeSoModalProduct, detail)}
+          onClose={() => setActiveSoModalProduct(null)}
         />
       )}
 

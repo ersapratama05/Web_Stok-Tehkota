@@ -8,6 +8,7 @@ import {
   calculateHabisGula,
   calculateOmsetAkhir,
   calculateOmsetKotor,
+  calculateProductEceranPcsSO,
   calculateStokAkhir,
   calculateTotalPengeluaran,
   convertTransferQtyToStockQty,
@@ -16,6 +17,7 @@ import {
   getJakartaTimeStr,
   getTodayDateStr,
   getYesterdayDateStr,
+  isProductSoCalculatorItem,
   normalizeSoValue,
   resolvePreviousGulaCarryover,
   validateGulaDetail,
@@ -983,14 +985,26 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
 
     // Recalculate stock ST server-side to guarantee accuracy
     const normalizedStocks = Array.isArray(stocks)
-      ? stocks.map((s: any) => ({
-          ...s,
-          sa: Number(s.sa) || 0,
-          inQty: Math.max(0, Number(s.inQty) || 0),
-          outQty: Math.max(0, Number(s.outQty) || 0),
-          st: calculateStokAkhir(s.sa, s.inQty, s.outQty),
-          so: normalizeSoValue(s.so),
-        }))
+      ? stocks.map((s: any) => {
+          const hasProductDetail =
+            isProductSoCalculatorItem(s.name) && s.soDetail && typeof s.soDetail === 'object';
+          const normalizedSoDetail = hasProductDetail
+            ? {
+                eceran: Math.max(0, Number(s.soDetail.eceran) || 0),
+                pcs: Math.max(0, Number(s.soDetail.pcs) || 0),
+                calculatedSo: calculateProductEceranPcsSO(s.soDetail.eceran, s.soDetail.pcs),
+              }
+            : undefined;
+          return {
+            ...s,
+            sa: Number(s.sa) || 0,
+            inQty: Math.max(0, Number(s.inQty) || 0),
+            outQty: Math.max(0, Number(s.outQty) || 0),
+            st: calculateStokAkhir(s.sa, s.inQty, s.outQty),
+            so: normalizedSoDetail ? normalizedSoDetail.calculatedSo : normalizeSoValue(s.so),
+            ...(normalizedSoDetail ? { soDetail: normalizedSoDetail } : {}),
+          };
+        })
       : [];
 
     const totalPengeluaran = calculateTotalPengeluaran(expenses);
@@ -2191,14 +2205,26 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
       const now = new Date().toISOString();
       const existing = await db.getRecordByBranchDate(rec.branch, rec.date);
       const normalizedStocks = Array.isArray(rec.stocks)
-        ? rec.stocks.map((s: any) => ({
-            ...s,
-            sa: Number(s.sa) || 0,
-            inQty: Math.max(0, Number(s.inQty) || 0),
-            outQty: Math.max(0, Number(s.outQty) || 0),
-            st: calculateStokAkhir(s.sa, s.inQty, s.outQty),
-            so: normalizeSoValue(s.so),
-          }))
+        ? rec.stocks.map((s: any) => {
+            const hasProductDetail =
+              isProductSoCalculatorItem(s.name) && s.soDetail && typeof s.soDetail === 'object';
+            const normalizedSoDetail = hasProductDetail
+              ? {
+                  eceran: Math.max(0, Number(s.soDetail.eceran) || 0),
+                  pcs: Math.max(0, Number(s.soDetail.pcs) || 0),
+                  calculatedSo: calculateProductEceranPcsSO(s.soDetail.eceran, s.soDetail.pcs),
+                }
+              : undefined;
+            return {
+              ...s,
+              sa: Number(s.sa) || 0,
+              inQty: Math.max(0, Number(s.inQty) || 0),
+              outQty: Math.max(0, Number(s.outQty) || 0),
+              st: calculateStokAkhir(s.sa, s.inQty, s.outQty),
+              so: normalizedSoDetail ? normalizedSoDetail.calculatedSo : normalizeSoValue(s.so),
+              ...(normalizedSoDetail ? { soDetail: normalizedSoDetail } : {}),
+            };
+          })
         : [];
       const totalPengeluaran = calculateTotalPengeluaran(rec.expenses || []);
       const qrisNum = Number(rec.qris) || 0;

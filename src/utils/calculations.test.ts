@@ -5,14 +5,17 @@ import {
   calculateCupSO,
   calculateGulaKemarinCarryover,
   calculateHabisGula,
+  calculateProductEceranPcsSO,
   calculateTotalPengeluaran,
   calculateOmsetAkhir,
   calculateOmsetKotor,
   calculateStokSelisih,
   formatNumberId,
+  isProductSoCalculatorItem,
   normalizeSoValue,
   parseRupiahInput,
   resolvePreviousGulaCarryover,
+  SO_CALCULATOR_PRODUCTS,
 } from './calculations';
 import { createInitialStockRows } from './itemsList';
 
@@ -37,6 +40,38 @@ test('Rumus SO CUP: 1 slop = 50 pcs', () => {
 
   // 0 slop + 37 pcs = 37 pcs
   assert.equal(calculateCupSO(0, 37), 37);
+});
+
+test('Kalkulator SO Produk (LEMON, LECI, PASSION, MELON, APEL, MANGGA, GRAPE): Jumlah Eceran + Jumlah PCS', () => {
+  assert.deepEqual(
+    [...SO_CALCULATOR_PRODUCTS],
+    ['LEMON', 'LECI', 'PASSION', 'MELON', 'APEL', 'MANGGA', 'GRAPE']
+  );
+
+  // Contoh wajib: Jumlah Eceran = 5, Jumlah PCS = 10 -> Total SO = 15
+  assert.equal(calculateProductEceranPcsSO(5, 10), 15);
+  assert.equal(calculateProductEceranPcsSO(0, 0), 0);
+  assert.equal(calculateProductEceranPcsSO(3, 0), 3);
+  assert.equal(calculateProductEceranPcsSO(0, 12), 12);
+
+  // Pastikan hanya 7 produk target yang aktif, produk lain di luar daftar tidak terpengaruh
+  for (const name of SO_CALCULATOR_PRODUCTS) {
+    assert.equal(isProductSoCalculatorItem(name), true);
+  }
+  assert.equal(isProductSoCalculatorItem('CUP'), false);
+  assert.equal(isProductSoCalculatorItem('Yoghurt Lemon'), false);
+  assert.equal(isProductSoCalculatorItem('Yoghurt Leci'), false);
+  assert.equal(isProductSoCalculatorItem('Thai Tea'), false);
+  assert.equal(isProductSoCalculatorItem('GULA PASIR'), false);
+
+  // Pastikan baris awal baru untuk ke-7 produk memiliki so: null dan soDetail: undefined
+  const freshRows = createInitialStockRows({ LEMON: 20, LECI: 30, PASSION: 10 });
+  for (const name of SO_CALCULATOR_PRODUCTS) {
+    const row = freshRows.find((r) => r.name === name);
+    assert.ok(row, `Produk ${name} harus ada di daftar stok`);
+    assert.equal(row?.so, null);
+    assert.equal(row?.soDetail, undefined);
+  }
 });
 
 test('Rumus Habis Gula = (Ambil + Kemarin) - Sisa Gula - Gula Cair', () => {

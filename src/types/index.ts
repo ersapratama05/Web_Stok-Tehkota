@@ -27,6 +27,12 @@ export interface CupDetail {
   calculatedSo: number; // (slop * 50) + pcs
 }
 
+export interface ProductSoDetail {
+  eceran: number;
+  pcs: number;
+  calculatedSo: number; // eceran + pcs
+}
+
 export interface GulaDetail {
   gulaAmbil: number;   // Gula ambil baru hari ini (KG)
   gulaKemarin: number; // Sisa gula dari hari kemarin pada cabang yang sama (KG)
@@ -46,6 +52,7 @@ export interface StockItemRow {
   so: number | null; // Stok Opname fisik aktual (null jika belum diisi)
   notes?: string;
   cupDetail?: CupDetail; // only for CUP item
+  soDetail?: ProductSoDetail; // rincian eceran + pcs untuk LEMON, LECI, PASSION, MELON, APEL, MANGGA, GRAPE
 }
 
 export interface ExpenseItem {
