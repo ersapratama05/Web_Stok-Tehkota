@@ -39,7 +39,9 @@ function makeSampleRecord(overrides: Partial<RekapRecord> = {}): RekapRecord {
       gulaCair: 1,
       habisGula: 5,
     },
-    notes: 'Grab: 2 pesanan, ShopeeFood: 1 pesanan',
+    catatanGrab: 'Grab 2 pesanan, ShopeeFood 1 pesanan.',
+    catatanBarang: 'Cup kurang 2 slop, gula 1 karung, plastik belum datang.',
+    notes: 'Mesin sealer kondisi normal.',
     ...overrides,
   };
 }
@@ -69,7 +71,7 @@ test('wrapTextLines memproses catatan kosong, multibaris, dan teks panjang tanpa
   assert.equal(splitUnbroken.join(''), unbroken);
 });
 
-test('buildRecordCsvContent menyertakan catatan kasir lengkap dan menjaga rumus omzet kotor', () => {
+test('buildRecordCsvContent menyertakan CATATAN GRAB, CATATAN BARANG, serta catatan lama lengkap dan menjaga rumus omzet kotor', () => {
   const sampleRecord = makeSampleRecord();
   const csv = buildRecordCsvContent(sampleRecord);
 
@@ -77,24 +79,40 @@ test('buildRecordCsvContent menyertakan catatan kasir lengkap dan menjaga rumus 
   assert.ok(csv.includes('Tanggal;2026-04-01'));
   assert.ok(csv.includes('Total Omset (Kotor);Rp 1920000'));
   assert.ok(csv.includes('CATATAN TAMBAHAN KASIR / OUTLET'));
-  assert.ok(csv.includes('Catatan;"Grab: 2 pesanan, ShopeeFood: 1 pesanan"'));
+  assert.ok(csv.includes('CATATAN GRAB;"Grab 2 pesanan, ShopeeFood 1 pesanan."'));
+  assert.ok(csv.includes('CATATAN BARANG;"Cup kurang 2 slop, gula 1 karung, plastik belum datang."'));
+  assert.ok(csv.includes('Catatan;"Mesin sealer kondisi normal."'));
 
   // Catatan kosong -> '-'
-  const emptyNotesCsv = buildRecordCsvContent(makeSampleRecord({ notes: '   ' }));
+  const emptyNotesCsv = buildRecordCsvContent(
+    makeSampleRecord({ catatanGrab: '  ', catatanBarang: '', notes: '   ' })
+  );
+  assert.ok(emptyNotesCsv.includes('CATATAN GRAB;"-"'));
+  assert.ok(emptyNotesCsv.includes('CATATAN BARANG;"-"'));
   assert.ok(emptyNotesCsv.includes('Catatan;"-"'));
 
   // Catatan panjang + tanda kutip + titik koma tidak terpotong & ter-escape aman
   const complexLongNote =
     'Grab: 2 pesanan ("Es Teh Ori"); ShopeeFood: 1 pesanan\nShift 2: tutup lebih awal karena hujan.';
-  const complexCsv = buildRecordCsvContent(makeSampleRecord({ notes: complexLongNote }));
+  const complexCsv = buildRecordCsvContent(
+    makeSampleRecord({
+      catatanGrab: complexLongNote,
+      catatanBarang: 'Gula 1 karung ("Kemasan Baru"); plastik 15 kurang 3 pack',
+      notes: 'Catatan lama tetap aman',
+    })
+  );
   assert.ok(
     complexCsv.includes(
-      'Catatan;"Grab: 2 pesanan (""Es Teh Ori""); ShopeeFood: 1 pesanan\r\nShift 2: tutup lebih awal karena hujan."'
+      'CATATAN GRAB;"Grab: 2 pesanan (""Es Teh Ori""); ShopeeFood: 1 pesanan\r\nShift 2: tutup lebih awal karena hujan."'
     ) ||
       complexCsv.includes(
-        'Catatan;"Grab: 2 pesanan (""Es Teh Ori""); ShopeeFood: 1 pesanan\nShift 2: tutup lebih awal karena hujan."'
+        'CATATAN GRAB;"Grab: 2 pesanan (""Es Teh Ori""); ShopeeFood: 1 pesanan\nShift 2: tutup lebih awal karena hujan."'
       )
   );
+  assert.ok(
+    complexCsv.includes('CATATAN BARANG;"Gula 1 karung (""Kemasan Baru""); plastik 15 kurang 3 pack"')
+  );
+  assert.ok(complexCsv.includes('Catatan;"Catatan lama tetap aman"'));
 });
 
 // 1x1 valid PNG & JPEG data URLs so jsPDF can embed image bytes cleanly during headless Node verification
@@ -161,6 +179,10 @@ test('Export CSV, PDF, PNG, dan JPG merender catatan kasir lengkap sesuai outlet
           click: () => {
             downloads.push({ filename: anchor.download, href: anchor.href });
           },
+          dispatchEvent: () => {
+            downloads.push({ filename: anchor.download, href: anchor.href });
+            return true;
+          },
         };
         return anchor;
       }
@@ -175,35 +197,59 @@ test('Export CSV, PDF, PNG, dan JPG merender catatan kasir lengkap sesuai outlet
     const sampleRecord = makeSampleRecord({
       branch: 'Suyudono',
       date: '2026-04-02',
-      notes: 'Grab: 2 pesanan, ShopeeFood: 1 pesanan',
+      catatanGrab: 'Grab 2 pesanan, ShopeeFood 1 pesanan.',
+      catatanBarang: 'Cup kurang 2 slop, gula 1 karung, plastik belum datang.',
+      notes: '',
     });
 
-    // 1. Render Canvas check (basis untuk PDF, PNG, JPG)
+    // 1. Render Canvas check (basis untuk PDF, PNG, JPG) menampilkan CATATAN GRAB & CATATAN BARANG terpisah
     drawnTexts.length = 0;
     const canvasShort = renderRecordCanvas(sampleRecord, null);
     assert.ok(drawnTexts.includes('CABANG: SUYUDONO'));
+    assert.ok(drawnTexts.includes('CATATAN GRAB'));
+    assert.ok(drawnTexts.includes('Grab 2 pesanan, ShopeeFood 1 pesanan.'));
+    assert.ok(drawnTexts.includes('CATATAN BARANG'));
+    assert.ok(drawnTexts.includes('Cup kurang 2 slop, gula 1 karung, plastik belum datang.'));
+
+    // 1b. Rekapan lama yang masih memiliki kolom notes tetap merender CATATAN TAMBAHAN KASIR / OUTLET
+    drawnTexts.length = 0;
+    renderRecordCanvas(
+      makeSampleRecord({
+        catatanGrab: 'Grab 2 pesanan',
+        catatanBarang: 'Cup kurang 2 slop',
+        notes: 'Catatan historis kasir sebelumnya tetap terbaca.',
+      }),
+      null
+    );
     assert.ok(drawnTexts.includes('CATATAN TAMBAHAN KASIR / OUTLET'));
-    assert.ok(drawnTexts.includes('Grab: 2 pesanan, ShopeeFood: 1 pesanan'));
+    assert.ok(drawnTexts.includes('Catatan historis kasir sebelumnya tetap terbaca.'));
 
     // 2. Canvas dengan catatan panjang (>250 karakter) tinggi kanvas bertambah otomatis & tidak terpotong
     drawnTexts.length = 0;
-    const veryLongNote =
-      'Grab: 2 pesanan, ShopeeFood: 1 pesanan. Tambahan keterangan panjang sekali: ' +
-      'seluruh pesanan ojol sudah selesai dipacking rapi dengan seal ganda, stok es batu sudah ditimbang ulang, dan selisih receh kasir sudah dicatat.';
-    const canvasLong = renderRecordCanvas(makeSampleRecord({ notes: veryLongNote }), null);
+    const veryLongGrab =
+      'Grab: 12 pesanan, ShopeeFood: 8 pesanan. Tambahan keterangan panjang sekali: ' +
+      'seluruh pesanan ojol sudah selesai dipacking rapi dengan seal ganda dan catatan driver.';
+    const veryLongBarang =
+      'Cup kurang 2 slop, gula 1 karung, plastik belum datang, sedotan kecil sisa 1 pack, ' +
+      'tutup cup butuh restock segera besok pagi sebelum outlet buka.';
+    const canvasLong = renderRecordCanvas(
+      makeSampleRecord({ catatanGrab: veryLongGrab, catatanBarang: veryLongBarang, notes: '' }),
+      null
+    );
     assert.ok(
       canvasLong.height > canvasShort.height,
       'Tinggi canvas harus bertambah otomatis mengikuti panjang catatan'
     );
     const renderedJoined = drawnTexts.join(' ');
-    assert.ok(renderedJoined.includes('Grab: 2 pesanan, ShopeeFood: 1 pesanan.'));
-    assert.ok(renderedJoined.includes('selisih receh kasir sudah dicatat.'));
+    assert.ok(renderedJoined.includes('seluruh pesanan ojol sudah selesai dipacking rapi'));
+    assert.ok(renderedJoined.includes('tutup cup butuh restock segera besok pagi sebelum outlet buka.'));
 
-    // 3. Canvas dengan catatan kosong menampilkan "-"
+    // 3. Canvas dengan kedua catatan kosong menampilkan "-" pada masing-masing bagian
     drawnTexts.length = 0;
-    renderRecordCanvas(makeSampleRecord({ notes: '' }), null);
-    assert.ok(drawnTexts.includes('CATATAN TAMBAHAN KASIR / OUTLET'));
-    assert.ok(drawnTexts.includes('-'));
+    renderRecordCanvas(makeSampleRecord({ catatanGrab: '', catatanBarang: '', notes: '' }), null);
+    assert.ok(drawnTexts.includes('CATATAN GRAB'));
+    assert.ok(drawnTexts.includes('CATATAN BARANG'));
+    assert.equal(drawnTexts.filter((t) => t === '-').length >= 2, true);
 
     // 4. Jalankan seluruh 4 fungsi download
     exportRecordToCsv(sampleRecord);

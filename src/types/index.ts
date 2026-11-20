@@ -101,7 +101,9 @@ export interface RekapRecord {
   qris: number; // Non-tunai
   omsetAkhir: number; // Omset Bersih = totalOmset - totalPengeluaran - qris
   gulaDetail?: GulaDetail; // Rekap kebutuhan gula & perhitungan otomatis
-  notes?: string;
+  catatanGrab?: string; // Catatan GrabFood, ShopeeFood, atau pesanan online lainnya
+  catatanBarang?: string; // Catatan informasi barang, kebutuhan outlet, dll
+  notes?: string; // Catatan tambahan umum / riwayat catatan lama
   auditLogs?: AuditLogEntry[]; // History of changes made from any device
 }
 

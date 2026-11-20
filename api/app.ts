@@ -405,6 +405,8 @@ async function applyTransferStockToBranch(params: {
             habisGula: 0,
           }
         : undefined,
+      catatanGrab: '',
+      catatanBarang: '',
       notes: '',
       revisionCount: 0,
       auditLogs: [],
@@ -891,7 +893,9 @@ app.get('/api/records', requireAuth, async (req: AuthedRequest, res) => {
         r.branch.toLowerCase().includes(q) ||
         (r.createdBy && r.createdBy.toLowerCase().includes(q)) ||
         (r.lastEditedBy && r.lastEditedBy.toLowerCase().includes(q)) ||
-        (r.notes && r.notes.toLowerCase().includes(q))
+        (r.notes && r.notes.toLowerCase().includes(q)) ||
+        (r.catatanGrab && r.catatanGrab.toLowerCase().includes(q)) ||
+        (r.catatanBarang && r.catatanBarang.toLowerCase().includes(q))
     );
   }
 
@@ -929,7 +933,9 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
       qris = 0,
       omsetAkhir: bodyOmsetAkhir,
       gulaDetail,
-      notes = '',
+      catatanGrab,
+      catatanBarang,
+      notes,
       mode, // optional: 'create' | 'update'
       expectedUpdatedAt,
       forceOverwrite = false,
@@ -1039,7 +1045,13 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
 
     const totalPengeluaran = calculateTotalPengeluaran(expenses);
     const qrisNum = Number(qris) || 0;
-    const normalizedNotes = typeof notes === 'string' ? notes : String(notes ?? '');
+    const normalizeOptionalNote = (incoming: unknown, existingVal?: string): string => {
+      if (incoming === undefined) return existingVal || '';
+      return typeof incoming === 'string' ? incoming : String(incoming ?? '');
+    };
+    const normalizedCatatanGrab = normalizeOptionalNote(catatanGrab, targetExisting?.catatanGrab);
+    const normalizedCatatanBarang = normalizeOptionalNote(catatanBarang, targetExisting?.catatanBarang);
+    const normalizedNotes = normalizeOptionalNote(notes, targetExisting?.notes);
     const hasExplicitOmsetAkhir = bodyOmsetAkhir !== undefined && bodyOmsetAkhir !== null;
     const omsetAkhir = hasExplicitOmsetAkhir
       ? Number(bodyOmsetAkhir) || 0
@@ -1118,6 +1130,22 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
           }
         }
       }
+      if ((targetExisting.catatanGrab || '') !== normalizedCatatanGrab) {
+        changes.push({
+          field: 'catatanGrab',
+          label: 'Catatan Grab',
+          before: targetExisting.catatanGrab || '-',
+          after: normalizedCatatanGrab || '-',
+        });
+      }
+      if ((targetExisting.catatanBarang || '') !== normalizedCatatanBarang) {
+        changes.push({
+          field: 'catatanBarang',
+          label: 'Catatan Barang',
+          before: targetExisting.catatanBarang || '-',
+          after: normalizedCatatanBarang || '-',
+        });
+      }
       if ((targetExisting.notes || '') !== normalizedNotes) {
         changes.push({
           field: 'notes',
@@ -1130,6 +1158,13 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
 
     let auditEntry: AuditLogEntry | undefined;
     if (!isUpdate || changes.length > 0) {
+      const combinedNoteSummary = [
+        normalizedCatatanGrab ? `Grab: ${normalizedCatatanGrab}` : '',
+        normalizedCatatanBarang ? `Barang: ${normalizedCatatanBarang}` : '',
+        normalizedNotes,
+      ]
+        .filter(Boolean)
+        .join(' | ');
       auditEntry = {
         id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         recordId,
@@ -1140,7 +1175,7 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
         timestamp: now,
         note: !isUpdate
           ? `Membuat rekapan baru Cabang ${branch}`
-          : normalizedNotes || 'Perubahan data rekapan dari perangkat',
+          : combinedNoteSummary || 'Perubahan data rekapan dari perangkat',
         changes: !isUpdate
           ? [
               {
@@ -1179,6 +1214,8 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
       qris: qrisNum,
       omsetAkhir,
       gulaDetail: normalizedGula || undefined,
+      catatanGrab: normalizedCatatanGrab,
+      catatanBarang: normalizedCatatanBarang,
       notes: normalizedNotes,
       auditLogs: mergedLogs,
     };
@@ -2327,6 +2364,10 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
         ],
       };
 
+      const normalizeSyncNote = (incoming: unknown, existingVal?: string): string => {
+        if (incoming === undefined) return existingVal || '';
+        return typeof incoming === 'string' ? incoming : String(incoming ?? '');
+      };
       const savedRec: RekapRecord = {
         ...rec,
         id: existing?.id || rec.id || `rek_${rec.branch.toLowerCase()}_${rec.date.replace(/-/g, '')}`,
@@ -2343,6 +2384,9 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
         qris: qrisNum,
         omsetAkhir,
         gulaDetail: normalizedGula,
+        catatanGrab: normalizeSyncNote(rec.catatanGrab, existing?.catatanGrab),
+        catatanBarang: normalizeSyncNote(rec.catatanBarang, existing?.catatanBarang),
+        notes: normalizeSyncNote(rec.notes, existing?.notes),
         auditLogs: [auditEntry, ...(existing?.auditLogs || [])],
       };
 

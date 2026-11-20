@@ -385,11 +385,29 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
           </div>
 
           {/* Notes */}
-          <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700">
-            <strong className="block text-slate-900 mb-1">Catatan Tambahan Kasir / Outlet:</strong>
-            <p className="whitespace-pre-wrap break-words">
-              {(record.notes || '').trim() || '-'}
-            </p>
+          <div className="space-y-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700">
+                <strong className="block text-slate-900 mb-1">CATATAN GRAB:</strong>
+                <p className="whitespace-pre-wrap break-words">
+                  {(record.catatanGrab || '').trim() || '-'}
+                </p>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700">
+                <strong className="block text-slate-900 mb-1">CATATAN BARANG:</strong>
+                <p className="whitespace-pre-wrap break-words">
+                  {(record.catatanBarang || '').trim() || '-'}
+                </p>
+              </div>
+            </div>
+            {(record.notes || '').trim() !== '' && (
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700">
+                <strong className="block text-slate-900 mb-1">Catatan Tambahan Kasir / Outlet:</strong>
+                <p className="whitespace-pre-wrap break-words">
+                  {record.notes!.trim()}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* SECTION: RIWAYAT PERUBAHAN (LOG EDIT MULTI-PERANGKAT) */}

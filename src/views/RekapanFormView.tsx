@@ -80,6 +80,8 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   const [expenses, setExpenses] = useState<ExpenseItem[]>([]);
   const [omsetAkhir, setOmsetAkhir] = useState<number>(0);
   const [qris, setQris] = useState<number>(0);
+  const [catatanGrab, setCatatanGrab] = useState<string>('');
+  const [catatanBarang, setCatatanBarang] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [recordId, setRecordId] = useState<string | null>(initialRecordId || null);
   const [recordStatus, setRecordStatus] = useState<'draft' | 'saved' | 'final'>('draft');
@@ -235,6 +237,8 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 )
             );
             setQris(existing.qris || 0);
+            setCatatanGrab(existing.catatanGrab || '');
+            setCatatanBarang(existing.catatanBarang || '');
             setNotes(existing.notes || '');
             setRevisionInfo({
               revisionCount: existing.revisionCount,
@@ -294,6 +298,8 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
               );
             }
             if (localDraft.qris !== undefined) setQris(localDraft.qris);
+            setCatatanGrab(localDraft.catatanGrab || '');
+            setCatatanBarang(localDraft.catatanBarang || '');
             setNotes(localDraft.notes || '');
             if (localDraft.gulaDetail) {
               setGulaAmbil(localDraft.gulaDetail.gulaAmbil || 0);
@@ -361,6 +367,8 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         setPreviousGulaDate(carryover.prevDateLabel);
         setSisaGula(0);
         setGulaCair(0);
+        setCatatanGrab('');
+        setCatatanBarang('');
         setNotes('');
         setRevisionInfo(null);
       } catch (err) {
@@ -718,6 +726,8 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
       setHasPreviousGula(foundPrevGula);
       setSisaGula(0);
       setGulaCair(0);
+      setCatatanGrab('');
+      setCatatanBarang('');
       setNotes('');
       setRecordId(null);
       setHasServerRecord(false);
@@ -788,6 +798,8 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         gulaCair,
         habisGula,
       },
+      catatanGrab,
+      catatanBarang,
       notes,
       mode: hasServerRecord ? 'update' : 'create',
       expectedUpdatedAt: loadedUpdatedAt || undefined,
@@ -922,6 +934,8 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           gulaCair,
           habisGula,
         },
+        catatanGrab,
+        catatanBarang,
         notes,
         status: 'draft',
       };
@@ -931,7 +945,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
-  }, [stocks, expenses, omsetAkhir, qris, notes, activeBranch, date, gulaAmbil, gulaKemarin, sisaGula, gulaCair, habisGula, isLoadingRecord, isSaving]);
+  }, [stocks, expenses, omsetAkhir, qris, notes, catatanGrab, catatanBarang, activeBranch, date, gulaAmbil, gulaKemarin, sisaGula, gulaCair, habisGula, isLoadingRecord, isSaving]);
 
   // Filter stocks by category and search
   const filteredStocks = stocks.filter((item) => {
@@ -1767,20 +1781,56 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         </div>
 
         {/* Optional Operational Notes */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">
-            Catatan Tambahan Kasir / Outlet (Opsional)
-          </label>
-          <textarea
-            rows={2}
-            value={notes}
-            onChange={(e) => {
-              hasUserEditedRef.current = true;
-              setNotes(e.target.value);
-            }}
-            placeholder="Contoh: Grab: 2 pesanan, ShopeeFood: 1 pesanan, kondisi mesin sealer, atau pesan shift..."
-            className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-1 focus:ring-emerald-600 outline-none"
-          />
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                CATATAN GRAB (Opsional)
+              </label>
+              <textarea
+                rows={2}
+                value={catatanGrab}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setCatatanGrab(e.target.value);
+                }}
+                placeholder="Contoh: Grab 2 pesanan, ShopeeFood 1 pesanan."
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-1 focus:ring-emerald-600 outline-none bg-white"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                CATATAN BARANG (Opsional)
+              </label>
+              <textarea
+                rows={2}
+                value={catatanBarang}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setCatatanBarang(e.target.value);
+                }}
+                placeholder="Contoh: Cup kurang 2 slop, gula 1 karung, plastik belum datang."
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-1 focus:ring-emerald-600 outline-none bg-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Catatan Tambahan Kasir / Outlet (Opsional)
+            </label>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => {
+                hasUserEditedRef.current = true;
+                setNotes(e.target.value);
+              }}
+              placeholder="Catatan tambahan umum shift, kondisi mesin sealer, atau keterangan lainnya..."
+              className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-1 focus:ring-emerald-600 outline-none"
+            />
+          </div>
         </div>
       </div>
       )}

@@ -419,8 +419,25 @@ test('hasMeaningfulDraftContent membedakan draf kosong (phantom draft) vs draf d
     true
   );
 
+  assert.equal(
+    hasMeaningfulDraftContent({
+      stocks: emptyStocks,
+      catatanGrab: 'Grab 2 pesanan, ShopeeFood 1 pesanan.',
+    }),
+    true
+  );
+
+  assert.equal(
+    hasMeaningfulDraftContent({
+      stocks: emptyStocks,
+      catatanBarang: 'Cup kurang 2 slop, gula 1 karung, plastik belum datang.',
+    }),
+    true
+  );
+
   const stocksWithZeroSo = createInitialStockRows({ CUP: 150 });
   stocksWithZeroSo[0].so = 0;
   assert.equal(hasMeaningfulDraftContent({ stocks: stocksWithZeroSo }), true);
 });
+
 

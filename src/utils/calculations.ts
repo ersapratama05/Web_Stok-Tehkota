@@ -336,6 +336,8 @@ export function hasMeaningfulDraftContent(draft: Partial<RekapRecord> | null | u
   if (Array.isArray(draft.expenses) && draft.expenses.length > 0) return true;
   if (Number(draft.omsetAkhir) > 0 || Number(draft.qris) > 0) return true;
   if (typeof draft.notes === 'string' && draft.notes.trim().length > 0) return true;
+  if (typeof draft.catatanGrab === 'string' && draft.catatanGrab.trim().length > 0) return true;
+  if (typeof draft.catatanBarang === 'string' && draft.catatanBarang.trim().length > 0) return true;
   if (draft.gulaDetail) {
     if (
       Number(draft.gulaDetail.gulaAmbil) > 0 ||

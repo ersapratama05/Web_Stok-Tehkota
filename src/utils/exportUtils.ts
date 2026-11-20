@@ -198,10 +198,14 @@ export function buildRecordCsvContent(record: RekapRecord): string {
   lines.push(`;TOTAL PENGELUARAN;${record.totalPengeluaran}`);
   lines.push('');
 
-  const trimmedNotes = (record.notes || '').replace(/\r\n/g, '\n').trim();
-  const escapedNotes = (trimmedNotes || '-').replace(/"/g, '""');
+  const formatCsvNote = (val?: string) => {
+    const cleaned = (val || '').replace(/\r\n/g, '\n').trim();
+    return (cleaned || '-').replace(/"/g, '""');
+  };
   lines.push('CATATAN TAMBAHAN KASIR / OUTLET');
-  lines.push(`Catatan;"${escapedNotes}"`);
+  lines.push(`CATATAN GRAB;"${formatCsvNote(record.catatanGrab)}"`);
+  lines.push(`CATATAN BARANG;"${formatCsvNote(record.catatanBarang)}"`);
+  lines.push(`Catatan;"${formatCsvNote(record.notes)}"`);
 
   return '\uFEFF' + lines.join('\r\n');
 }
@@ -258,23 +262,45 @@ export function renderRecordCanvas(
   const gulaHeight = headerRowHeight + 4 * rowHeight + 28;
   const financialHeight = headerRowHeight + 4 * 26;
   const measureCtx = canvas.getContext('2d');
-  const noteText = (record.notes || '').trim() || '-';
   const noteMaxWidth = colW - 20;
   const noteLineHeight = 16;
   const noteHeaderHeight = 22;
   const notePadTop = 8;
   const notePadBottom = 10;
 
-  let noteLines: string[] = ['-'];
-  if (measureCtx) {
-    measureCtx.font = '11px "Plus Jakarta Sans", sans-serif';
-    noteLines = wrapTextLines(noteText, noteMaxWidth, (sample) => measureCtx.measureText(sample).width);
-  } else {
-    noteLines = wrapTextLines(noteText, 76, (sample) => sample.length);
+  const wrapNoteBlock = (raw?: string): string[] => {
+    const val = (raw || '').trim() || '-';
+    if (measureCtx) {
+      measureCtx.font = '11px "Plus Jakarta Sans", sans-serif';
+      return wrapTextLines(val, noteMaxWidth, (sample) => measureCtx.measureText(sample).width);
+    }
+    return wrapTextLines(val, 76, (sample) => sample.length);
+  };
+
+  const noteSections: Array<{ title: string; text: string; lines: string[]; boxHeight: number }> = [
+    { title: 'CATATAN GRAB', text: (record.catatanGrab || '').trim() || '-', lines: [] },
+    { title: 'CATATAN BARANG', text: (record.catatanBarang || '').trim() || '-', lines: [] },
+  ].map((sec) => {
+    const lines = wrapNoteBlock(sec.text);
+    return {
+      ...sec,
+      lines,
+      boxHeight: noteHeaderHeight + notePadTop + lines.length * noteLineHeight + notePadBottom,
+    };
+  });
+
+  const legacyNoteRaw = (record.notes || '').trim();
+  if (legacyNoteRaw) {
+    const legacyLines = wrapNoteBlock(legacyNoteRaw);
+    noteSections.push({
+      title: 'CATATAN TAMBAHAN KASIR / OUTLET',
+      text: legacyNoteRaw,
+      lines: legacyLines,
+      boxHeight: noteHeaderHeight + notePadTop + legacyLines.length * noteLineHeight + notePadBottom,
+    });
   }
 
-  const noteBoxHeight = noteHeaderHeight + notePadTop + noteLines.length * noteLineHeight + notePadBottom;
-  const noteExtra = gap + noteBoxHeight;
+  const noteExtra = noteSections.reduce((sum, sec) => sum + gap + sec.boxHeight, 0);
   const rightTotalHeight =
     teaHeight + gap + coffeeHeight + gap + gulaHeight + gap + financialHeight + noteExtra;
 
@@ -607,30 +633,32 @@ export function renderRecordCanvas(
     rightY += 26;
   });
 
-  // Catatan Tambahan Kasir / Outlet (Selalu ditampilkan lengkap tanpa terpotong)
-  rightY += gap;
-  ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(rightX, rightY, colW, noteBoxHeight);
-  ctx.strokeStyle = '#cbd5e1';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(rightX, rightY, colW, noteBoxHeight);
+  // CATATAN GRAB, CATATAN BARANG, & Catatan Lama (jika ada) — selalu tampil lengkap tanpa terpotong
+  for (const sec of noteSections) {
+    rightY += gap;
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(rightX, rightY, colW, sec.boxHeight);
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(rightX, rightY, colW, sec.boxHeight);
 
-  ctx.fillStyle = '#1e293b';
-  ctx.fillRect(rightX, rightY, colW, noteHeaderHeight);
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
-  ctx.fillText('CATATAN TAMBAHAN KASIR / OUTLET', rightX + 10, rightY + 15);
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(rightX, rightY, colW, noteHeaderHeight);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
+    ctx.fillText(sec.title, rightX + 10, rightY + 15);
 
-  ctx.fillStyle = noteText === '-' ? '#64748b' : '#0f172a';
-  ctx.font = '11px "Plus Jakarta Sans", sans-serif';
-  let noteLineY = rightY + noteHeaderHeight + notePadTop + 11;
-  for (const line of noteLines) {
-    if (line) {
-      ctx.fillText(line, rightX + 10, noteLineY);
+    ctx.fillStyle = sec.text === '-' ? '#64748b' : '#0f172a';
+    ctx.font = '11px "Plus Jakarta Sans", sans-serif';
+    let noteLineY = rightY + noteHeaderHeight + notePadTop + 11;
+    for (const line of sec.lines) {
+      if (line) {
+        ctx.fillText(line, rightX + 10, noteLineY);
+      }
+      noteLineY += noteLineHeight;
     }
-    noteLineY += noteLineHeight;
+    rightY += sec.boxHeight;
   }
-  rightY += noteBoxHeight;
 
   // Footer
   const maxEndY = Math.max(leftY, rightY) + 22;
