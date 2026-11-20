@@ -186,7 +186,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setSyncStatus('saved');
             setLastSavedTime(`${getJakartaTimeStr()} WIB`);
             window.dispatchEvent(
-              new CustomEvent('tehkota:sync-record', { detail: { event: 'poll_update', records: json.records } })
+              new CustomEvent('tehkota:sync-record', {
+                detail: {
+                  event: 'poll_update',
+                  records: json.records,
+                  isInitialPoll: !wasInitialized,
+                },
+              })
             );
           } else {
             setLastSavedTime(`${getJakartaTimeStr()} WIB`);

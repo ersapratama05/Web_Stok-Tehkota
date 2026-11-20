@@ -14,8 +14,10 @@ import {
   getJakartaTimeStr,
   getTodayDateStr,
   getYesterdayDateStr,
+  hasMeaningfulDraftContent,
   isProductSoCalculatorItem,
   parseRupiahInput,
+  reconcileStockRowsWithCarryover,
   resolvePreviousGulaCarryover,
   validateGulaDetail,
 } from '../utils/calculations';
@@ -116,9 +118,13 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     createdBy?: string;
   } | null>(null);
 
-  // Autosave debounce timer ref
+  // Autosave debounce timer & user-edit tracking refs
   const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoadRef = useRef<boolean>(true);
+  const hasUserEditedRef = useRef<boolean>(false);
+  const hasEditedGulaKemarinRef = useRef<boolean>(false);
+  const latestStocksRef = useRef<StockItemRow[]>(stocks);
+  latestStocksRef.current = stocks;
 
   // Calculations
   const totalPengeluaran = calculateTotalPengeluaran(expenses);
@@ -132,6 +138,64 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     habisGula,
   });
 
+  const fetchPreviousCarryover = useCallback(async (targetBranch: Branch, targetDate: string) => {
+    let serverResponded = false;
+    let prevStocksMap: Record<string, number> | undefined;
+    let autoGulaKemarin = 0;
+    let foundPrevGula = false;
+    let prevGulaIncomplete = false;
+    let prevDateLabel: string | undefined;
+
+    try {
+      const prevRes = await apiFetch(
+        `/api/records/previous-stock?branch=${encodeURIComponent(targetBranch)}&date=${encodeURIComponent(targetDate)}`
+      );
+      if (prevRes.ok) {
+        serverResponded = true;
+        const prevData = await prevRes.json();
+        if (prevData.stocks) {
+          prevStocksMap = prevData.stocks;
+        }
+        if (prevData.gulaKemarin !== undefined) {
+          autoGulaKemarin = prevData.gulaKemarin;
+        }
+        foundPrevGula = Boolean(prevData.hasPreviousGula);
+        prevGulaIncomplete = Boolean(prevData.previousGulaIncomplete);
+        prevDateLabel = prevData.previousDate;
+      }
+    } catch {
+      // handled below when offline
+    }
+
+    // Offline / network-error fallback ONLY when server did not respond
+    if (!serverResponded) {
+      const cachedAll = getCachedRecords();
+      const cachedPrior = cachedAll
+        .filter((r) => r.branch === targetBranch && r.date < targetDate)
+        .sort((a, b) => b.date.localeCompare(a.date))[0];
+      if (cachedPrior && cachedPrior.stocks) {
+        prevStocksMap = {};
+        for (const item of cachedPrior.stocks) {
+          prevStocksMap[item.name] = item.st;
+        }
+      }
+      const sugarFallback = resolvePreviousGulaCarryover(cachedAll, targetBranch, targetDate);
+      autoGulaKemarin = sugarFallback.gulaKemarin;
+      foundPrevGula = sugarFallback.hasPreviousGula;
+      prevGulaIncomplete = sugarFallback.isIncomplete;
+      prevDateLabel = sugarFallback.previousDate;
+    }
+
+    return {
+      serverResponded,
+      prevStocksMap,
+      autoGulaKemarin,
+      foundPrevGula,
+      prevGulaIncomplete,
+      prevDateLabel,
+    };
+  }, []);
+
   // Load record or previous day carryover when branch or date changes
   const loadDataForBranchAndDate = useCallback(
     async (targetBranch: Branch, targetDate: string) => {
@@ -140,6 +204,8 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         autosaveTimerRef.current = null;
       }
       isInitialLoadRef.current = true;
+      hasUserEditedRef.current = false;
+      hasEditedGulaKemarinRef.current = false;
       setIsLoadingRecord(true);
       setSaveMessage(null);
       setConflictModal(null);
@@ -198,96 +264,101 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           }
         }
 
-        // 2. If no record on server, check local draft
+        // Fetch previous day carryover (needed both for fresh form AND reconciling local drafts)
+        const carryover = await fetchPreviousCarryover(targetBranch, targetDate);
+        const baseFreshStocks = createInitialStockRows(carryover.prevStocksMap);
+
+        // 2. If no record on server, check local draft (ignore empty phantom drafts)
         setHasServerRecord(false);
         setLoadedUpdatedAt(null);
         const localDraft = getLocalDraft(targetBranch, targetDate);
         if (localDraft) {
-          setRecordId(localDraft.id || null);
-          setRecordStatus(localDraft.status || 'draft');
-          if (localDraft.stocks) setStocks(localDraft.stocks);
-          if (localDraft.expenses) setExpenses(localDraft.expenses);
-          if (localDraft.omsetAkhir !== undefined) {
-            setOmsetAkhir(localDraft.omsetAkhir);
-          } else if (localDraft.totalOmset !== undefined) {
-            const draftPengeluaran = calculateTotalPengeluaran(localDraft.expenses || []);
-            setOmsetAkhir(
-              calculateOmsetAkhir(localDraft.totalOmset, draftPengeluaran, localDraft.qris || 0)
+          if (!hasMeaningfulDraftContent(localDraft)) {
+            removeLocalDraft(targetBranch, targetDate);
+          } else {
+            const reconciled = reconcileStockRowsWithCarryover(
+              localDraft.stocks,
+              carryover.prevStocksMap,
+              baseFreshStocks
             );
-          }
-          if (localDraft.qris !== undefined) setQris(localDraft.qris);
-          setNotes(localDraft.notes || '');
-          if (localDraft.gulaDetail) {
-            setGulaAmbil(localDraft.gulaDetail.gulaAmbil || 0);
-            setGulaKemarin(localDraft.gulaDetail.gulaKemarin || 0);
-            setSisaGula(localDraft.gulaDetail.sisaGula || 0);
-            setGulaCair(localDraft.gulaDetail.gulaCair || 0);
-          }
-          setHasPreviousGula(false);
-          setPreviousGulaIncomplete(false);
-          setPreviousGulaDate(undefined);
-          setRevisionInfo(null);
-          setSaveMessage({
-            text: `Melanjutkan draf lokal sementara untuk tanggal ${formatDateIndo(targetDate)}`,
-            type: 'info',
-          });
-          setIsLoadingRecord(false);
-          return;
-        }
-
-        // 3. New record: Fetch previous day ST to auto-populate SA & Gula Kemarin (Sisa Gula Fisik + Gula Cair hari sebelumnya)
-        const prevRes = await apiFetch(`/api/records/previous-stock?branch=${targetBranch}&date=${targetDate}`);
-        let serverResponded = false;
-        let prevStocksMap: Record<string, number> | undefined;
-        let autoGulaKemarin = 0;
-        let foundPrevGula = false;
-        let prevGulaIncomplete = false;
-        let prevDateLabel: string | undefined;
-        if (prevRes.ok) {
-          serverResponded = true;
-          const prevData = await prevRes.json();
-          if (prevData.stocks) {
-            prevStocksMap = prevData.stocks;
-          }
-          if (prevData.gulaKemarin !== undefined) {
-            autoGulaKemarin = prevData.gulaKemarin;
-          }
-          foundPrevGula = Boolean(prevData.hasPreviousGula);
-          prevGulaIncomplete = Boolean(prevData.previousGulaIncomplete);
-          prevDateLabel = prevData.previousDate;
-        }
-
-        // Offline / network-error fallback ONLY when server did not respond
-        if (!serverResponded) {
-          const cachedAll = getCachedRecords();
-          const cachedPrior = cachedAll
-            .filter((r) => r.branch === targetBranch && r.date < targetDate)
-            .sort((a, b) => b.date.localeCompare(a.date))[0];
-          if (cachedPrior && cachedPrior.stocks) {
-            prevStocksMap = {};
-            for (const item of cachedPrior.stocks) {
-              prevStocksMap[item.name] = item.st;
+            setRecordId(localDraft.id || null);
+            setRecordStatus(localDraft.status || 'draft');
+            setStocks(reconciled.stocks);
+            if (localDraft.expenses) setExpenses(localDraft.expenses);
+            if (localDraft.omsetAkhir !== undefined) {
+              setOmsetAkhir(localDraft.omsetAkhir);
+            } else if (localDraft.totalOmset !== undefined) {
+              const draftPengeluaran = calculateTotalPengeluaran(localDraft.expenses || []);
+              setOmsetAkhir(
+                calculateOmsetAkhir(localDraft.totalOmset, draftPengeluaran, localDraft.qris || 0)
+              );
             }
+            if (localDraft.qris !== undefined) setQris(localDraft.qris);
+            setNotes(localDraft.notes || '');
+            if (localDraft.gulaDetail) {
+              setGulaAmbil(localDraft.gulaDetail.gulaAmbil || 0);
+              setGulaKemarin(
+                carryover.foundPrevGula
+                  ? carryover.autoGulaKemarin
+                  : localDraft.gulaDetail.gulaKemarin || 0
+              );
+              setSisaGula(localDraft.gulaDetail.sisaGula || 0);
+              setGulaCair(localDraft.gulaDetail.gulaCair || 0);
+            } else {
+              setGulaAmbil(0);
+              setGulaKemarin(carryover.autoGulaKemarin);
+              setSisaGula(0);
+              setGulaCair(0);
+            }
+            setHasPreviousGula(carryover.foundPrevGula);
+            setPreviousGulaIncomplete(carryover.prevGulaIncomplete);
+            setPreviousGulaDate(carryover.prevDateLabel);
+            setRevisionInfo(null);
+            if (reconciled.changed) {
+              saveLocalDraft(targetBranch, targetDate, {
+                ...localDraft,
+                stocks: reconciled.stocks,
+                gulaDetail: {
+                  gulaAmbil: localDraft.gulaDetail?.gulaAmbil || 0,
+                  gulaKemarin: carryover.foundPrevGula
+                    ? carryover.autoGulaKemarin
+                    : localDraft.gulaDetail?.gulaKemarin || 0,
+                  sisaGula: localDraft.gulaDetail?.sisaGula || 0,
+                  gulaCair: localDraft.gulaDetail?.gulaCair || 0,
+                  habisGula: calculateHabisGula(
+                    localDraft.gulaDetail?.gulaAmbil || 0,
+                    carryover.foundPrevGula
+                      ? carryover.autoGulaKemarin
+                      : localDraft.gulaDetail?.gulaKemarin || 0,
+                    localDraft.gulaDetail?.sisaGula || 0,
+                    localDraft.gulaDetail?.gulaCair || 0
+                  ),
+                },
+              });
+            }
+            setSaveMessage({
+              text: reconciled.changed
+                ? `Melanjutkan draf lokal tanggal ${formatDateIndo(targetDate)} dengan SA & ST terbaru dari server.`
+                : `Melanjutkan draf lokal sementara untuk tanggal ${formatDateIndo(targetDate)}`,
+              type: 'info',
+            });
+            setIsLoadingRecord(false);
+            return;
           }
-          const sugarFallback = resolvePreviousGulaCarryover(cachedAll, targetBranch, targetDate);
-          autoGulaKemarin = sugarFallback.gulaKemarin;
-          foundPrevGula = sugarFallback.hasPreviousGula;
-          prevGulaIncomplete = sugarFallback.isIncomplete;
-          prevDateLabel = sugarFallback.previousDate;
         }
 
-        const freshStocks = createInitialStockRows(prevStocksMap);
-        setStocks(freshStocks);
+        // 3. New record: Auto-populate SA & Gula Kemarin from previous day ST / Sisa+Cair
+        setStocks(baseFreshStocks);
         setRecordId(null);
         setRecordStatus('draft');
         setExpenses([]);
         setOmsetAkhir(0);
         setQris(0);
         setGulaAmbil(0);
-        setGulaKemarin(autoGulaKemarin);
-        setHasPreviousGula(foundPrevGula);
-        setPreviousGulaIncomplete(prevGulaIncomplete);
-        setPreviousGulaDate(prevDateLabel);
+        setGulaKemarin(carryover.autoGulaKemarin);
+        setHasPreviousGula(carryover.foundPrevGula);
+        setPreviousGulaIncomplete(carryover.prevGulaIncomplete);
+        setPreviousGulaDate(carryover.prevDateLabel);
         setSisaGula(0);
         setGulaCair(0);
         setNotes('');
@@ -307,7 +378,36 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         setIsLoadingRecord(false);
       }
     },
-    []
+    [fetchPreviousCarryover]
+  );
+
+  // Reconcile SA & ST in place when an earlier date's record changes on another device
+  const reconcileCarryoverInPlace = useCallback(
+    async (targetBranch: Branch, targetDate: string, noticeSource?: string) => {
+      const carryover = await fetchPreviousCarryover(targetBranch, targetDate);
+      const baseFreshStocks = createInitialStockRows(carryover.prevStocksMap);
+      const res = reconcileStockRowsWithCarryover(
+        latestStocksRef.current,
+        carryover.prevStocksMap,
+        baseFreshStocks
+      );
+      if (res.changed) {
+        setStocks(res.stocks);
+      }
+      setHasPreviousGula(carryover.foundPrevGula);
+      setPreviousGulaIncomplete(carryover.prevGulaIncomplete);
+      setPreviousGulaDate(carryover.prevDateLabel);
+      if (!hasServerRecord && carryover.foundPrevGula && !hasEditedGulaKemarinRef.current) {
+        setGulaKemarin(carryover.autoGulaKemarin);
+      }
+      if (res.changed && noticeSource) {
+        setSaveMessage({
+          text: `Stok Awal (SA) & ST Cabang ${targetBranch} otomatis disinkronkan dari pembaruan ${noticeSource}.`,
+          type: 'info',
+        });
+      }
+    },
+    [fetchPreviousCarryover, hasServerRecord]
   );
 
   // Sync props if changed externally (e.g. from clicking edit or table row)
@@ -328,7 +428,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     loadDataForBranchAndDate(activeBranch, date);
   }, [activeBranch, date, loadDataForBranchAndDate]);
 
-  // Listen for real-time synchronization events from other devices (including deletions & resets)
+  // Listen for real-time synchronization events from other devices (including deletions, resets, poll updates & prior-date changes)
   useEffect(() => {
     const handleSync = async (e: any) => {
       const detail = e.detail;
@@ -351,6 +451,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             autosaveTimerRef.current = null;
           }
           isInitialLoadRef.current = true;
+          hasUserEditedRef.current = false;
           removeLocalDraft(activeBranch, date);
           removeRecordFromLocalCache(detail.deletedId, activeBranch, date);
           removeFromSyncQueue(detail.deletedId, activeBranch, date);
@@ -359,6 +460,21 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             text: `Rekapan Cabang ${activeBranch} tanggal ${formatDateIndo(date)} telah dihapus dari database server.`,
             type: 'info',
           });
+          return;
+        }
+
+        const deletedPriorSingle =
+          detail.branch === activeBranch && Boolean(detail.date && detail.date < date);
+        const deletedPriorList =
+          Array.isArray(detail.deletedItems) &&
+          detail.deletedItems.some(
+            (item: any) =>
+              (item.branch === 'All' || item.branch === activeBranch) &&
+              item.date &&
+              item.date < date
+          );
+        if (deletedPriorSingle || deletedPriorList) {
+          await reconcileCarryoverInPlace(activeBranch, date, detail.editedBy || 'penghapusan rekapan sebelumnya');
         }
         return;
       }
@@ -370,8 +486,42 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
             autosaveTimerRef.current = null;
           }
           isInitialLoadRef.current = true;
+          hasUserEditedRef.current = false;
           removeLocalDraft(activeBranch, date);
           await loadDataForBranchAndDate(activeBranch, date);
+        }
+        return;
+      }
+
+      if (detail.event === 'poll_update' && Array.isArray(detail.records)) {
+        const branchRecords = detail.records.filter(
+          (r: RekapRecord) => r && r.branch === activeBranch
+        );
+        if (branchRecords.length === 0) return;
+
+        const sameDateRec = branchRecords.find((r: RekapRecord) => r.date === date);
+        if (
+          sameDateRec &&
+          (!hasServerRecord || (sameDateRec.updatedAt && sameDateRec.updatedAt !== loadedUpdatedAt))
+        ) {
+          if (!hasUserEditedRef.current) {
+            await loadDataForBranchAndDate(activeBranch, date);
+          } else {
+            await reconcileCarryoverInPlace(
+              activeBranch,
+              date,
+              detail.isInitialPoll ? undefined : sameDateRec.lastEditedBy || sameDateRec.createdBy
+            );
+          }
+          return;
+        }
+
+        if (branchRecords.some((r: RekapRecord) => r.date < date)) {
+          await reconcileCarryoverInPlace(
+            activeBranch,
+            date,
+            detail.isInitialPoll ? undefined : 'rekapan hari sebelumnya'
+          );
         }
         return;
       }
@@ -379,18 +529,36 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
       if (detail.branch === activeBranch && detail.date === date) {
         if (detail.event === 'record_updated' || detail.event === 'record_created') {
           const editor = detail.editedBy || 'Pengguna lain';
-          await loadDataForBranchAndDate(activeBranch, date);
-          setSaveMessage({
-            text: `Data rekapan Cabang ${activeBranch} tanggal ${formatDateIndo(date)} baru saja diperbarui oleh ${editor} dari perangkat lain.`,
-            type: 'info',
-          });
+          if (!hasUserEditedRef.current) {
+            await loadDataForBranchAndDate(activeBranch, date);
+            setSaveMessage({
+              text: `Data rekapan Cabang ${activeBranch} tanggal ${formatDateIndo(date)} baru saja diperbarui oleh ${editor} dari perangkat lain.`,
+              type: 'info',
+            });
+          } else {
+            await reconcileCarryoverInPlace(activeBranch, date, editor);
+          }
+        }
+        return;
+      }
+
+      if (detail.branch === activeBranch && detail.date && detail.date < date) {
+        if (detail.event === 'record_updated' || detail.event === 'record_created') {
+          await reconcileCarryoverInPlace(activeBranch, date, detail.editedBy || 'rekapan hari sebelumnya');
         }
       }
     };
 
     window.addEventListener('tehkota:sync-record', handleSync);
     return () => window.removeEventListener('tehkota:sync-record', handleSync);
-  }, [activeBranch, date, loadDataForBranchAndDate]);
+  }, [
+    activeBranch,
+    date,
+    hasServerRecord,
+    loadedUpdatedAt,
+    loadDataForBranchAndDate,
+    reconcileCarryoverInPlace,
+  ]);
 
   // Handle stock value changes
   const handleStockChange = (
@@ -398,6 +566,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     field: 'inQty' | 'outQty' | 'so',
     value: string | number | null
   ) => {
+    hasUserEditedRef.current = true;
     setStocks((prev) =>
       prev.map((item) => {
         if (item.name !== itemName) return item;
@@ -431,6 +600,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
 
   // Handle CUP Modal Save
   const handleSaveCupDetail = (detail: CupDetail) => {
+    hasUserEditedRef.current = true;
     setStocks((prev) =>
       prev.map((item) => {
         if (item.name !== 'CUP') return item;
@@ -445,6 +615,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
 
   // Handle Product SO Calculator Save (LEMON, LECI, PASSION, MELON, APEL, MANGGA, GRAPE)
   const handleSaveProductSoDetail = (productName: string, detail: ProductSoDetail) => {
+    hasUserEditedRef.current = true;
     setStocks((prev) =>
       prev.map((item) => {
         if (item.name !== productName) return item;
@@ -459,6 +630,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
 
   // Expenses management
   const handleAddExpenseRow = () => {
+    hasUserEditedRef.current = true;
     setExpenses((prev) => [
       ...prev,
       { id: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`, name: '', amount: 0 },
@@ -466,6 +638,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   };
 
   const handleExpenseChange = (id: string, field: 'name' | 'amount', val: any) => {
+    hasUserEditedRef.current = true;
     setExpenses((prev) =>
       prev.map((exp) => {
         if (exp.id !== id) return exp;
@@ -478,6 +651,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
   };
 
   const handleDeleteExpenseRow = (id: string) => {
+    hasUserEditedRef.current = true;
     setExpenses((prev) => prev.filter((exp) => exp.id !== id));
   };
 
@@ -675,6 +849,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
         if (statusToSave === 'saved') {
           removeLocalDraft(activeBranch, date);
         }
+        hasUserEditedRef.current = false;
         saveRecordToLocal(resData.record);
 
         setSaveMessage({
@@ -715,9 +890,9 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     }
   };
 
-  // Autosave Local Recovery Draft Debounced (1.5 seconds - backup only, not central DB)
+  // Autosave Local Recovery Draft Debounced (1.5 seconds - only when user actually edited)
   useEffect(() => {
-    if (isLoadingRecord || isSaving) {
+    if (isLoadingRecord || isSaving || !hasUserEditedRef.current) {
       return;
     }
     if (isInitialLoadRef.current) {
@@ -756,7 +931,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
-  }, [stocks, expenses, omsetAkhir, qris, notes, activeBranch, date, gulaAmbil, gulaKemarin, sisaGula, gulaCair, habisGula]);
+  }, [stocks, expenses, omsetAkhir, qris, notes, activeBranch, date, gulaAmbil, gulaKemarin, sisaGula, gulaCair, habisGula, isLoadingRecord, isSaving]);
 
   // Filter stocks by category and search
   const filteredStocks = stocks.filter((item) => {
@@ -1360,7 +1535,10 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 step="any"
                 min="0"
                 value={gulaAmbil === 0 ? '' : gulaAmbil}
-                onChange={(e) => setGulaAmbil(Math.max(0, parseFloat(e.target.value) || 0))}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setGulaAmbil(Math.max(0, parseFloat(e.target.value) || 0));
+                }}
                 placeholder="0"
                 className="w-full pl-3 pr-10 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
               />
@@ -1397,7 +1575,11 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 step="any"
                 min="0"
                 value={gulaKemarin === 0 ? '' : gulaKemarin}
-                onChange={(e) => setGulaKemarin(Math.max(0, parseFloat(e.target.value) || 0))}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  hasEditedGulaKemarinRef.current = true;
+                  setGulaKemarin(Math.max(0, parseFloat(e.target.value) || 0));
+                }}
                 placeholder="0"
                 className="w-full pl-3 pr-10 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
               />
@@ -1419,7 +1601,10 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 step="any"
                 min="0"
                 value={sisaGula === 0 ? '' : sisaGula}
-                onChange={(e) => setSisaGula(Math.max(0, parseFloat(e.target.value) || 0))}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setSisaGula(Math.max(0, parseFloat(e.target.value) || 0));
+                }}
                 placeholder="0"
                 className="w-full pl-3 pr-10 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
               />
@@ -1441,7 +1626,10 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 step="any"
                 min="0"
                 value={gulaCair === 0 ? '' : gulaCair}
-                onChange={(e) => setGulaCair(Math.max(0, parseFloat(e.target.value) || 0))}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setGulaCair(Math.max(0, parseFloat(e.target.value) || 0));
+                }}
                 placeholder="0"
                 className="w-full pl-3 pr-10 py-2 text-sm font-mono font-bold text-slate-900 rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-600 outline-none bg-white text-right tabular-nums"
               />
@@ -1538,7 +1726,10 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 type="text"
                 inputMode="numeric"
                 value={qris === 0 ? '' : formatNumberId(qris)}
-                onChange={(e) => setQris(parseRupiahInput(e.target.value))}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setQris(parseRupiahInput(e.target.value));
+                }}
                 placeholder="0"
                 className="w-full pl-9 pr-3 py-2 text-sm font-mono font-bold text-blue-900 rounded-lg border border-blue-300 focus:ring-2 focus:ring-blue-600 outline-none bg-white text-right tabular-nums"
               />
@@ -1561,7 +1752,10 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                 type="text"
                 inputMode="numeric"
                 value={omsetAkhir === 0 ? '' : formatNumberId(omsetAkhir)}
-                onChange={(e) => setOmsetAkhir(parseRupiahInput(e.target.value))}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setOmsetAkhir(parseRupiahInput(e.target.value));
+                }}
                 placeholder="0"
                 className="w-full pl-9 pr-3 py-2 text-base sm:text-lg font-mono font-extrabold text-emerald-800 bg-white rounded-lg border border-emerald-300 focus:ring-2 focus:ring-emerald-600 outline-none text-right tabular-nums shadow-inner"
               />
@@ -1580,7 +1774,10 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           <textarea
             rows={2}
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={(e) => {
+              hasUserEditedRef.current = true;
+              setNotes(e.target.value);
+            }}
             placeholder="Contoh: Grab: 2 pesanan, ShopeeFood: 1 pesanan, kondisi mesin sealer, atau pesan shift..."
             className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-1 focus:ring-emerald-600 outline-none"
           />

@@ -1,4 +1,4 @@
-import { ExpenseItem, GulaDetail } from '../types';
+import { ExpenseItem, GulaDetail, RekapRecord, StockItemRow } from '../types';
 
 export const JAKARTA_TIMEZONE = 'Asia/Jakarta';
 
@@ -273,6 +273,87 @@ export function calculateStokSelisih(
   if (normalizedSo === null) return null;
   const stVal = Number(st) || 0;
   return Math.round((normalizedSo - stVal) * 100) / 100;
+}
+
+/**
+ * Menyelaraskan baris stok lokal/draf dengan SA carryover terbaru dari server.
+ * - SA (read-only) diperbarui mengikuti ST hari sebelumnya (atau defaultSa jika belum ada rekapan sebelumnya)
+ * - ST dihitung ulang dengan rumus wajib: ST = SA + IN - OUT
+ * - Input kasir (IN, OUT, SO, cupDetail, soDetail) tetap dipertahankan utuh
+ */
+export function reconcileStockRowsWithCarryover(
+  currentRows: StockItemRow[] | undefined | null,
+  prevStocksMap: Record<string, number> | undefined,
+  baseRows: StockItemRow[]
+): { stocks: StockItemRow[]; changed: boolean } {
+  const existingMap = new Map<string, StockItemRow>();
+  if (Array.isArray(currentRows)) {
+    for (const row of currentRows) {
+      if (row && row.name) {
+        existingMap.set(row.name, row);
+      }
+    }
+  }
+
+  let changed = !Array.isArray(currentRows) || currentRows.length !== baseRows.length;
+
+  const stocks: StockItemRow[] = baseRows.map((baseRow) => {
+    const existing = existingMap.get(baseRow.name);
+    const nextSa =
+      prevStocksMap && prevStocksMap[baseRow.name] !== undefined
+        ? Number(prevStocksMap[baseRow.name]) || 0
+        : baseRow.sa;
+    const inQty = existing ? Math.max(0, Number(existing.inQty) || 0) : 0;
+    const outQty = existing ? Math.max(0, Number(existing.outQty) || 0) : 0;
+    const nextSt = calculateStokAkhir(nextSa, inQty, outQty);
+
+    if (!existing || existing.sa !== nextSa || existing.st !== nextSt) {
+      changed = true;
+    }
+
+    return {
+      ...baseRow,
+      ...(existing || {}),
+      name: baseRow.name,
+      category: baseRow.category,
+      unit: baseRow.unit,
+      sa: nextSa,
+      inQty,
+      outQty,
+      st: nextSt,
+      so: existing ? normalizeSoValue(existing.so) : null,
+    };
+  });
+
+  return { stocks, changed };
+}
+
+/**
+ * Mengecek apakah draf lokal benar-benar berisi input kasir (bukan draf kosong hasil pembukaan form).
+ */
+export function hasMeaningfulDraftContent(draft: Partial<RekapRecord> | null | undefined): boolean {
+  if (!draft || typeof draft !== 'object') return false;
+  if (Array.isArray(draft.expenses) && draft.expenses.length > 0) return true;
+  if (Number(draft.omsetAkhir) > 0 || Number(draft.qris) > 0) return true;
+  if (typeof draft.notes === 'string' && draft.notes.trim().length > 0) return true;
+  if (draft.gulaDetail) {
+    if (
+      Number(draft.gulaDetail.gulaAmbil) > 0 ||
+      Number(draft.gulaDetail.sisaGula) > 0 ||
+      Number(draft.gulaDetail.gulaCair) > 0
+    ) {
+      return true;
+    }
+  }
+  if (Array.isArray(draft.stocks)) {
+    for (const s of draft.stocks) {
+      if (!s) continue;
+      if (Number(s.inQty) > 0 || Number(s.outQty) > 0) return true;
+      if (s.so !== null && s.so !== undefined) return true;
+      if (s.cupDetail || s.soDetail) return true;
+    }
+  }
+  return false;
 }
 
 /**

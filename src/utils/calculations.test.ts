@@ -11,9 +11,11 @@ import {
   calculateOmsetKotor,
   calculateStokSelisih,
   formatNumberId,
+  hasMeaningfulDraftContent,
   isProductSoCalculatorItem,
   normalizeSoValue,
   parseRupiahInput,
+  reconcileStockRowsWithCarryover,
   resolvePreviousGulaCarryover,
   SO_CALCULATOR_PRODUCTS,
 } from './calculations';
@@ -344,3 +346,81 @@ test('Pemisahan outlet (Sompok vs Suyudono), pemisahan tanggal, dan penanganan r
   assert.equal(partialGula.isIncomplete, true);
   assert.equal(partialGula.gulaKemarin, 0);
 });
+
+test('Rekonsiliasi draf lokal SA & ST terhadap carryover server (kasus 19 Nov DRAFT -> disimpan 20 Nov)', () => {
+  // Simulasi draf lokal kasir 20 Nov yang terlanjur terbentuk saat 19 Nov masih DRAFT/belum final (SA lama 0)
+  const staleDraftRows = createInitialStockRows({ CUP: 0, LEMON: 0 });
+  const draftCup = staleDraftRows.find((r) => r.name === 'CUP')!;
+  draftCup.inQty = 100;
+  draftCup.outQty = 40;
+  draftCup.st = calculateStokAkhir(draftCup.sa, draftCup.inQty, draftCup.outQty); // 0 + 100 - 40 = 60
+
+  const draftLemon = staleDraftRows.find((r) => r.name === 'LEMON')!;
+  draftLemon.inQty = 5;
+  draftLemon.outQty = 2;
+  draftLemon.so = 13;
+  draftLemon.soDetail = { eceran: 3, pcs: 10, calculatedSo: 13 };
+  draftLemon.st = calculateStokAkhir(draftLemon.sa, draftLemon.inQty, draftLemon.outQty);
+
+  // Setelah rekapan 19 Nov Sompok disimpan final -> server mengembalikan ST 19 Nov: CUP = 250, LEMON = 20
+  const serverCarryover = { CUP: 250, LEMON: 20 };
+  const baseRows = createInitialStockRows(serverCarryover);
+  const reconciled = reconcileStockRowsWithCarryover(staleDraftRows, serverCarryover, baseRows);
+
+  assert.equal(reconciled.changed, true);
+  const resCup = reconciled.stocks.find((r) => r.name === 'CUP')!;
+  const resLemon = reconciled.stocks.find((r) => r.name === 'LEMON')!;
+  const resLeci = reconciled.stocks.find((r) => r.name === 'LECI')!;
+
+  // SA wajib ikut ST 19 Nov dari server, ST wajib SA + IN - OUT, input kasir & SO tetap aman
+  assert.equal(resCup.sa, 250);
+  assert.equal(resCup.inQty, 100);
+  assert.equal(resCup.outQty, 40);
+  assert.equal(resCup.st, 310); // 250 + 100 - 40
+  assert.equal(resCup.so, null); // SO kosong tetap kosong
+
+  assert.equal(resLemon.sa, 20);
+  assert.equal(resLemon.inQty, 5);
+  assert.equal(resLemon.outQty, 2);
+  assert.equal(resLemon.st, 23); // 20 + 5 - 2
+  assert.equal(resLemon.so, 13);
+  assert.deepEqual(resLemon.soDetail, { eceran: 3, pcs: 10, calculatedSo: 13 });
+
+  assert.equal(resLeci.sa, 0);
+  assert.equal(resLeci.st, 0);
+  assert.equal(resLeci.so, null);
+
+  // Rekonsiliasi ulang dengan nilai sama -> changed = false
+  const secondPass = reconcileStockRowsWithCarryover(reconciled.stocks, serverCarryover, baseRows);
+  assert.equal(secondPass.changed, false);
+});
+
+test('hasMeaningfulDraftContent membedakan draf kosong (phantom draft) vs draf dengan input kasir', () => {
+  const emptyStocks = createInitialStockRows({ CUP: 150 });
+  assert.equal(
+    hasMeaningfulDraftContent({
+      branch: 'Sompok',
+      date: '2026-11-20',
+      stocks: emptyStocks,
+      expenses: [],
+      omsetAkhir: 0,
+      qris: 0,
+      notes: '   ',
+      gulaDetail: { gulaAmbil: 0, gulaKemarin: 5, sisaGula: 0, gulaCair: 0, habisGula: 5 },
+    }),
+    false
+  );
+
+  assert.equal(
+    hasMeaningfulDraftContent({
+      stocks: emptyStocks,
+      notes: 'Grab: 2 pesanan',
+    }),
+    true
+  );
+
+  const stocksWithZeroSo = createInitialStockRows({ CUP: 150 });
+  stocksWithZeroSo[0].so = 0;
+  assert.equal(hasMeaningfulDraftContent({ stocks: stocksWithZeroSo }), true);
+});
+

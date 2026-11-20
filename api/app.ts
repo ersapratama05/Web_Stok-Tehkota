@@ -231,14 +231,19 @@ setInterval(() => {
 // ----------------------------------------------------
 // STOCK CASCADE & INTER-BRANCH STOCK INTEGRATION HELPERS
 // ----------------------------------------------------
-async function cascadeSubsequentRecords(branch: Branch, fromDate: string, startStocks: RekapRecord['stocks']) {
+async function cascadeSubsequentRecords(
+  branch: Branch,
+  fromDate: string,
+  startStocks: RekapRecord['stocks']
+): Promise<RekapRecord[]> {
   const allBranch = await db.getRecords({ branch });
   const subsequentRecords = allBranch
     .filter((r) => r.date > fromDate)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  if (subsequentRecords.length === 0) return;
+  if (subsequentRecords.length === 0) return [];
 
+  const updatedRecords: RekapRecord[] = [];
   let currentPrevStocks = startStocks;
   for (const subRecord of subsequentRecords) {
     let changed = false;
@@ -258,12 +263,17 @@ async function cascadeSubsequentRecords(branch: Branch, fromDate: string, startS
     if (changed) {
       subRecord.updatedAt = new Date().toISOString();
       await db.upsertRecord(subRecord);
+      updatedRecords.push(subRecord);
     }
     currentPrevStocks = subRecord.stocks;
   }
+  return updatedRecords;
 }
 
-async function recalculateBranchChainAfterDelete(branch: Branch, deletedDate: string) {
+async function recalculateBranchChainAfterDelete(
+  branch: Branch,
+  deletedDate: string
+): Promise<RekapRecord[]> {
   const allBranch = await db.getRecords({ branch });
   const priorRecords = allBranch
     .filter((r) => r.date < deletedDate)
@@ -272,9 +282,9 @@ async function recalculateBranchChainAfterDelete(branch: Branch, deletedDate: st
     .filter((r) => r.date > deletedDate)
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  if (subsequentRecords.length === 0) return;
+  if (subsequentRecords.length === 0) return [];
 
-  const baseStocks = priorRecords[0]?.stocks || createInitialStockRows();
+  const updatedRecords: RekapRecord[] = [];
   // Use either prior day's ST or defaultSa when no prior day exists
   const startMap = new Map<string, number>();
   if (priorRecords[0]) {
@@ -301,6 +311,7 @@ async function recalculateBranchChainAfterDelete(branch: Branch, deletedDate: st
     if (changed) {
       subRecord.updatedAt = new Date().toISOString();
       await db.upsertRecord(subRecord);
+      updatedRecords.push(subRecord);
     }
     const nextMap = new Map<string, number>();
     for (const row of subRecord.stocks) {
@@ -308,6 +319,7 @@ async function recalculateBranchChainAfterDelete(branch: Branch, deletedDate: st
     }
     currentMap = nextMap;
   }
+  return updatedRecords;
 }
 
 async function getCarryoverForDate(branch: Branch, targetDate: string) {
@@ -461,7 +473,7 @@ async function applyTransferStockToBranch(params: {
 
   await db.upsertRecord(record);
   await db.appendAuditLog(auditEntry);
-  await cascadeSubsequentRecords(branch, date, record.stocks);
+  const cascaded = await cascadeSubsequentRecords(branch, date, record.stocks);
 
   broadcastSyncEvent({
     event: 'record_updated',
@@ -472,6 +484,17 @@ async function applyTransferStockToBranch(params: {
     auditLog: auditEntry,
     timestamp: now,
   });
+
+  for (const subRec of cascaded) {
+    broadcastSyncEvent({
+      event: 'record_updated',
+      branch,
+      date: subRec.date,
+      record: subRec,
+      editedBy: operatorName,
+      timestamp: subRec.updatedAt || now,
+    });
+  }
 
   return record;
 }
@@ -983,7 +1006,8 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
     const recordId =
       targetExisting?.id || id || `rek_${branch.toLowerCase()}_${date.replace(/-/g, '')}`;
 
-    // Recalculate stock ST server-side to guarantee accuracy
+    // Anchor stock SA & recalculate ST server-side from authoritative prior ST on same branch
+    const priorCarryover = await getCarryoverForDate(branch, date);
     const normalizedStocks = Array.isArray(stocks)
       ? stocks.map((s: any) => {
           const hasProductDetail =
@@ -995,12 +1019,18 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
                 calculatedSo: calculateProductEceranPcsSO(s.soDetail.eceran, s.soDetail.pcs),
               }
             : undefined;
+          const anchoredSa =
+            priorCarryover.hasPrevious && priorCarryover.stocks[s.name] !== undefined
+              ? priorCarryover.stocks[s.name]
+              : Number(s.sa) || 0;
+          const inQty = Math.max(0, Number(s.inQty) || 0);
+          const outQty = Math.max(0, Number(s.outQty) || 0);
           return {
             ...s,
-            sa: Number(s.sa) || 0,
-            inQty: Math.max(0, Number(s.inQty) || 0),
-            outQty: Math.max(0, Number(s.outQty) || 0),
-            st: calculateStokAkhir(s.sa, s.inQty, s.outQty),
+            sa: anchoredSa,
+            inQty,
+            outQty,
+            st: calculateStokAkhir(anchoredSa, inQty, outQty),
             so: normalizedSoDetail ? normalizedSoDetail.calculatedSo : normalizeSoValue(s.so),
             ...(normalizedSoDetail ? { soDetail: normalizedSoDetail } : {}),
           };
@@ -1155,9 +1185,7 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
 
     await db.upsertRecord(newRecord);
 
-    if (newRecord.status !== 'draft') {
-      await cascadeSubsequentRecords(branch, date, newRecord.stocks);
-    }
+    const cascaded = await cascadeSubsequentRecords(branch, date, newRecord.stocks);
 
     broadcastSyncEvent({
       event: isUpdate ? 'record_updated' : 'record_created',
@@ -1168,6 +1196,17 @@ app.post('/api/records', requireAuth, async (req: AuthedRequest, res) => {
       auditLog: auditEntry,
       timestamp: now,
     });
+
+    for (const subRec of cascaded) {
+      broadcastSyncEvent({
+        event: 'record_updated',
+        branch,
+        date: subRec.date,
+        record: subRec,
+        editedBy: editorName,
+        timestamp: subRec.updatedAt || now,
+      });
+    }
 
     res.json({
       success: true,
@@ -1222,7 +1261,10 @@ app.delete('/api/records/:id', requireAuth, async (req: AuthedRequest, res) => {
     }
 
     // Recalculate SA & ST on subsequent days for the affected branch
-    await recalculateBranchChainAfterDelete(deleteResult.deleted.branch, deleteResult.deleted.date);
+    const cascadedAfterDelete = await recalculateBranchChainAfterDelete(
+      deleteResult.deleted.branch,
+      deleteResult.deleted.date
+    );
 
     broadcastSyncEvent({
       event: 'record_deleted',
@@ -1233,6 +1275,17 @@ app.delete('/api/records/:id', requireAuth, async (req: AuthedRequest, res) => {
       auditLog: deleteResult.auditEntry,
       timestamp: now,
     });
+
+    for (const subRec of cascadedAfterDelete) {
+      broadcastSyncEvent({
+        event: 'record_updated',
+        branch: subRec.branch,
+        date: subRec.date,
+        record: subRec,
+        editedBy: req.authUser!.name,
+        timestamp: subRec.updatedAt || now,
+      });
+    }
 
     res.json({
       success: true,
@@ -2204,6 +2257,7 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
 
       const now = new Date().toISOString();
       const existing = await db.getRecordByBranchDate(rec.branch, rec.date);
+      const priorCarryover = await getCarryoverForDate(rec.branch, rec.date);
       const normalizedStocks = Array.isArray(rec.stocks)
         ? rec.stocks.map((s: any) => {
             const hasProductDetail =
@@ -2215,12 +2269,18 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
                   calculatedSo: calculateProductEceranPcsSO(s.soDetail.eceran, s.soDetail.pcs),
                 }
               : undefined;
+            const anchoredSa =
+              priorCarryover.hasPrevious && priorCarryover.stocks[s.name] !== undefined
+                ? priorCarryover.stocks[s.name]
+                : Number(s.sa) || 0;
+            const inQty = Math.max(0, Number(s.inQty) || 0);
+            const outQty = Math.max(0, Number(s.outQty) || 0);
             return {
               ...s,
-              sa: Number(s.sa) || 0,
-              inQty: Math.max(0, Number(s.inQty) || 0),
-              outQty: Math.max(0, Number(s.outQty) || 0),
-              st: calculateStokAkhir(s.sa, s.inQty, s.outQty),
+              sa: anchoredSa,
+              inQty,
+              outQty,
+              st: calculateStokAkhir(anchoredSa, inQty, outQty),
               so: normalizedSoDetail ? normalizedSoDetail.calculatedSo : normalizeSoValue(s.so),
               ...(normalizedSoDetail ? { soDetail: normalizedSoDetail } : {}),
             };
@@ -2288,9 +2348,7 @@ app.post('/api/sync', requireAuth, async (req: AuthedRequest, res) => {
 
       await db.upsertRecord(savedRec);
       await db.appendAuditLog(auditEntry);
-      if (savedRec.status !== 'draft') {
-        await cascadeSubsequentRecords(savedRec.branch, savedRec.date, savedRec.stocks);
-      }
+      await cascadeSubsequentRecords(savedRec.branch, savedRec.date, savedRec.stocks);
       syncedRecords.push(savedRec);
       count++;
     }
