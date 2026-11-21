@@ -388,7 +388,7 @@ export const HistoryDetailModal: React.FC<HistoryDetailModalProps> = ({
           <div className="space-y-2.5">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs text-slate-700">
-                <strong className="block text-slate-900 mb-1">CATATAN GRAB:</strong>
+                <strong className="block text-slate-900 mb-1">CATATAN GO FOOD:</strong>
                 <p className="whitespace-pre-wrap break-words">
                   {(record.catatanGrab || '').trim() || '-'}
                 </p>

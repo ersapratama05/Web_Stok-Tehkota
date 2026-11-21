@@ -1580,7 +1580,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
                   ? `Auto Sisa+Cair ${previousGulaDate || 'Kemarin'}`
                   : previousGulaIncomplete
                   ? `Gula ${previousGulaDate || 'Kemarin'} Belum Lengkap`
-                  : 'Saldo Awal Manual'}
+                  : 'Sisa Gula + Gula Cair'}
               </span>
             </div>
             <div className="relative">
@@ -1785,7 +1785,7 @@ export const RekapanFormView: React.FC<RekapanFormViewProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                CATATAN GRAB (Opsional)
+                CATATAN GO FOOD (Opsional)
               </label>
               <textarea
                 rows={2}

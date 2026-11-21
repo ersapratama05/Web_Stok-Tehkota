@@ -203,7 +203,7 @@ export function buildRecordCsvContent(record: RekapRecord): string {
     return (cleaned || '-').replace(/"/g, '""');
   };
   lines.push('CATATAN TAMBAHAN KASIR / OUTLET');
-  lines.push(`CATATAN GRAB;"${formatCsvNote(record.catatanGrab)}"`);
+  lines.push(`CATATAN GO FOOD;"${formatCsvNote(record.catatanGrab)}"`);
   lines.push(`CATATAN BARANG;"${formatCsvNote(record.catatanBarang)}"`);
   lines.push(`Catatan;"${formatCsvNote(record.notes)}"`);
 
@@ -255,12 +255,6 @@ export function renderRecordCanvas(
   const yoghurtHeight = headerRowHeight + yoghurtSeries.length * rowHeight;
   const chocoHeight = headerRowHeight + chocoSeries.length * rowHeight;
   const pengeluaranHeight = headerRowHeight + (expCount + 1) * rowHeight;
-  const leftTotalHeight = bahanHeight + gap + yoghurtHeight + gap + chocoHeight + gap + pengeluaranHeight;
-
-  const teaHeight = headerRowHeight + teaSeries.length * rowHeight;
-  const coffeeHeight = headerRowHeight + coffeeSeries.length * rowHeight;
-  const gulaHeight = headerRowHeight + 4 * rowHeight + 28;
-  const financialHeight = headerRowHeight + 4 * 26;
   const measureCtx = canvas.getContext('2d');
   const noteMaxWidth = colW - 20;
   const noteLineHeight = 16;
@@ -277,30 +271,45 @@ export function renderRecordCanvas(
     return wrapTextLines(val, 76, (sample) => sample.length);
   };
 
-  const noteSections: Array<{ title: string; text: string; lines: string[]; boxHeight: number }> = [
-    { title: 'CATATAN GRAB', text: (record.catatanGrab || '').trim() || '-', lines: [] },
-    { title: 'CATATAN BARANG', text: (record.catatanBarang || '').trim() || '-', lines: [] },
-  ].map((sec) => {
-    const lines = wrapNoteBlock(sec.text);
+  const buildNoteSection = (title: string, rawText: string) => {
+    const text = (rawText || '').trim() || '-';
+    const lines = wrapNoteBlock(text);
     return {
-      ...sec,
+      title,
+      text,
       lines,
       boxHeight: noteHeaderHeight + notePadTop + lines.length * noteLineHeight + notePadBottom,
     };
-  });
+  };
+
+  const catatanBarangSection = buildNoteSection('CATATAN BARANG', (record.catatanBarang || '').trim() || '-');
+
+  const leftTotalHeight =
+    bahanHeight +
+    gap +
+    yoghurtHeight +
+    gap +
+    chocoHeight +
+    gap +
+    pengeluaranHeight +
+    gap +
+    catatanBarangSection.boxHeight;
+
+  const teaHeight = headerRowHeight + teaSeries.length * rowHeight;
+  const coffeeHeight = headerRowHeight + coffeeSeries.length * rowHeight;
+  const gulaHeight = headerRowHeight + 4 * rowHeight + 28;
+  const financialHeight = headerRowHeight + 4 * 26;
+
+  const rightNoteSections: Array<{ title: string; text: string; lines: string[]; boxHeight: number }> = [
+    buildNoteSection('CATATAN GO FOOD', (record.catatanGrab || '').trim() || '-'),
+  ];
 
   const legacyNoteRaw = (record.notes || '').trim();
   if (legacyNoteRaw) {
-    const legacyLines = wrapNoteBlock(legacyNoteRaw);
-    noteSections.push({
-      title: 'CATATAN TAMBAHAN KASIR / OUTLET',
-      text: legacyNoteRaw,
-      lines: legacyLines,
-      boxHeight: noteHeaderHeight + notePadTop + legacyLines.length * noteLineHeight + notePadBottom,
-    });
+    rightNoteSections.push(buildNoteSection('CATATAN TAMBAHAN KASIR / OUTLET', legacyNoteRaw));
   }
 
-  const noteExtra = noteSections.reduce((sum, sec) => sum + gap + sec.boxHeight, 0);
+  const noteExtra = rightNoteSections.reduce((sum, sec) => sum + gap + sec.boxHeight, 0);
   const rightTotalHeight =
     teaHeight + gap + coffeeHeight + gap + gulaHeight + gap + financialHeight + noteExtra;
 
@@ -525,6 +534,39 @@ export function renderRecordCanvas(
   ctx.textAlign = 'left';
   leftY += headerRowHeight;
 
+  const drawNoteSectionBox = (
+    x: number,
+    y: number,
+    sec: { title: string; text: string; lines: string[]; boxHeight: number }
+  ): number => {
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(x, y, colW, sec.boxHeight);
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, colW, sec.boxHeight);
+
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(x, y, colW, noteHeaderHeight);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
+    ctx.fillText(sec.title, x + 10, y + 15);
+
+    ctx.fillStyle = sec.text === '-' ? '#64748b' : '#0f172a';
+    ctx.font = '11px "Plus Jakarta Sans", sans-serif';
+    let noteLineY = y + noteHeaderHeight + notePadTop + 11;
+    for (const line of sec.lines) {
+      if (line) {
+        ctx.fillText(line, x + 10, noteLineY);
+      }
+      noteLineY += noteLineHeight;
+    }
+    return y + sec.boxHeight;
+  };
+
+  // CATATAN BARANG di kolom kiri, tepat di bawah Pengeluaran Operasional
+  leftY += gap;
+  leftY = drawNoteSectionBox(leftX, leftY, catatanBarangSection);
+
   // --- RIGHT COLUMN ---
   rightY = drawStockTable(ctx, 'TEA SERIES', teaSeries, rightX, rightY, '#047857');
   rightY += gap;
@@ -633,31 +675,10 @@ export function renderRecordCanvas(
     rightY += 26;
   });
 
-  // CATATAN GRAB, CATATAN BARANG, & Catatan Lama (jika ada) — selalu tampil lengkap tanpa terpotong
-  for (const sec of noteSections) {
+  // CATATAN GRAB & Catatan Lama (jika ada) di kolom kanan — selalu tampil lengkap tanpa terpotong
+  for (const sec of rightNoteSections) {
     rightY += gap;
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(rightX, rightY, colW, sec.boxHeight);
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(rightX, rightY, colW, sec.boxHeight);
-
-    ctx.fillStyle = '#1e293b';
-    ctx.fillRect(rightX, rightY, colW, noteHeaderHeight);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
-    ctx.fillText(sec.title, rightX + 10, rightY + 15);
-
-    ctx.fillStyle = sec.text === '-' ? '#64748b' : '#0f172a';
-    ctx.font = '11px "Plus Jakarta Sans", sans-serif';
-    let noteLineY = rightY + noteHeaderHeight + notePadTop + 11;
-    for (const line of sec.lines) {
-      if (line) {
-        ctx.fillText(line, rightX + 10, noteLineY);
-      }
-      noteLineY += noteLineHeight;
-    }
-    rightY += sec.boxHeight;
+    rightY = drawNoteSectionBox(rightX, rightY, sec);
   }
 
   // Footer
